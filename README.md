@@ -6,7 +6,7 @@ An n-body simulator implemented in Pygame.
 
 Create the universe:
 
-```
+```python
 from cosmosim.core.universe import Universe 
 from cosmosim.core.planet import Planet
 
@@ -15,39 +15,39 @@ universe = Universe()
 
 Create a planet and add it to the universe:
 
-```
+```python
 planet1 = Planet(mass=1000, radius=6, position=[0,0])
 universe.add_planet(planet1)
 ```
 
 Or, add a planet directly to the universe upon creation:
-```
+
+```python
 planet2 = universe.create_planet(mass=10, radius=2, position=[100,0], velocity=[0,2])
 ```
 
 Create a planet with randomized parameters:
 
-```
+```python
 planet3 = universe.random_planet()
 ```
 
 Add a satellite around the random planet:
 
-```
+```python
 planet3a = planet3.create_satellite()
 ```
 
 Run the simulation:
 
-```
+```python
 universe.simulate()
-
 ```
 ## Example
 
-Cosmosim model interactions between hundreds of objects:
+Cosmosim can model interactions between hundreds of objects:
 
-```
+```python
 from cosmosim.core.universe import Universe
 import cosmosim.util.functions as F
 import math
