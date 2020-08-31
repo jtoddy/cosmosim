@@ -1,6 +1,6 @@
 # cosmosim
  
-An n-body simulator implemented in Pygame. 
+A 2D n-body gravitational simulator implemented in pygame. 
 
 ## Basic functionality
 
