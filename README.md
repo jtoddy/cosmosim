@@ -82,7 +82,7 @@ universe = Universe()
 # Create a star
 STAR_DENSITY = 1
 STAR_MASS = 300000
-STAR_RADIUS = F.get_radius(STAR_MASS, STAR_DENSITY)
+STAR_RADIUS = get_radius(STAR_MASS, STAR_DENSITY)
 STAR_POSITION = [0,0]
 STAR_NAME = "Sol"
 STAR_COLOR = (255,255,0)
@@ -100,7 +100,7 @@ MAX_MASS = 10
 for i in range(NUM_PLANETS):
     PLANET_DISTANCE = random.randint(D_MIN, D_MAX)
     PLANET_MASS = random.randint(MIN_MASS, MAX_MASS)
-    PLANET_RADIUS = F.get_radius(PLANET_MASS, PLANET_DENSITY)
+    PLANET_RADIUS = get_radius(PLANET_MASS, PLANET_DENSITY)
     star.create_satellite(distance=PLANET_DISTANCE,mass=PLANET_MASS,radius=PLANET_RADIUS)
    
 #Simulate
