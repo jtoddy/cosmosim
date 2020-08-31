@@ -11,9 +11,9 @@ BLACK = (0,0,0)
 
 class Planet:
     
-    def __init__(self, universe, mass, radius, position, velocity=[0.0,0.0], color=None, immobile=False, name=None):
+    def __init__(self, mass, radius, position, velocity=[0.0,0.0], color=None, immobile=False, name=None, universe=None):
         # Initialize planet
-        self.universe = universe
+        self.universe = None
         self.name = name
         self.mass = mass
         self.radius = radius
@@ -34,14 +34,13 @@ class Planet:
             self.name = prnc.generate_word()
         if not self.color:
             self.color = (int(255*random.random()),int(255*random.random()),int(255*random.random()))
-        self.universe.add_planet(self)
             
     def create_satellite(self, distance=None, mass=None, radius=None, theta=None, name=None, color=None):
         G = self.universe.G
         if not distance:
-            distance = random.randint(self.radius*5, self.radius*100)
+            distance = random.randint(int(self.radius*5), int(self.radius*100))
         if not mass:
-            mass = random.random()*self.mass()
+            mass = random.random()*self.mass
         if not radius:
             radius = F.get_radius(mass, 1)
         if theta is None:
@@ -50,7 +49,7 @@ class Planet:
         pos = F.to_cartesian(distance, theta)[::-1]
         pos_norm = pos/np.linalg.norm(pos)
         v = F.rotation(v_mag*pos_norm,math.pi/2)
-        Planet(self.universe, mass, radius, pos, v, name=name, color=color)    
+        return self.universe.create_planet(mass=mass, radius=radius, position=pos, velocity=v, name=name, color=color)
             
     def update_history(self, trail_length):
         if self.alive and self.tracked:

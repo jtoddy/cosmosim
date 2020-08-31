@@ -14,7 +14,8 @@ STAR_POSITION = [0,0]
 STAR_NAME = "Sol"
 STAR_COLOR = (255,255,0)
 IMMOBILE = True
-star = Planet(universe, STAR_MASS, STAR_RADIUS, STAR_POSITION, immobile=IMMOBILE, name=STAR_NAME, color=STAR_COLOR)
+star = Planet(STAR_MASS, STAR_RADIUS, STAR_POSITION, immobile=IMMOBILE, name=STAR_NAME, color=STAR_COLOR)
+universe.add_planet(star)
 
 # Create some planets in a disk around the star
 NUM_PLANETS = 1000

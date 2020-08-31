@@ -28,8 +28,14 @@ class Universe:
                 
     def add_planet(self, planet):
         self.planets.append(planet)
+        planet.universe = self
         
-    def randomPlanet(self, density=1, min_mass=1, max_mass=100, dmin=0, dmax=500, min_velocity=1.0, max_velocity=3.0, name=None, color=None):
+    def create_planet(self, **kwargs):
+        planet = Planet(**kwargs)
+        self.add_planet(planet)
+        return planet
+        
+    def random_planet(self, density=1, min_mass=1, max_mass=100, dmin=0, dmax=500, min_velocity=1.0, max_velocity=3.0, name=None, color=None):
         mass = random.randint(min_mass, max_mass)
         radius = F.get_radius(mass,density)
         ppolar = [random.randint(dmin,dmax), random.random()*(2*math.pi)]
@@ -37,7 +43,7 @@ class Universe:
         v0 = min_velocity + (max_velocity - min_velocity) * random.random()
         v_theta = 2*math.pi * random.random()
         velocity = [v0*math.cos(v_theta),v0*math.sin(v_theta)]
-        return Planet(self,mass,radius,position,velocity,color=color,name=name)
+        return self.create_planet(mass=mass,radius=radius,position=position,velocity=velocity,color=color,name=name)
     
     def active_planets(self):
         return [planet for planet in self.planets if planet.alive]

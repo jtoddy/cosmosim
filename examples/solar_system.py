@@ -13,7 +13,8 @@ STAR_POSITION = [0,0]
 STAR_NAME = "Sol" 
 STAR_COLOR = (255,255,0)
 IMMOBILE = True
-sol = Planet(universe, STAR_MASS, STAR_RADIUS, STAR_POSITION, immobile=IMMOBILE, name=STAR_NAME, color=STAR_COLOR)
+sol = Planet(STAR_MASS, STAR_RADIUS, STAR_POSITION, immobile=IMMOBILE, name=STAR_NAME, color=STAR_COLOR)
+universe.add_planet(sol)
 
 au = STAR_RADIUS*215
 

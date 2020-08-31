@@ -7,11 +7,11 @@ universe = Universe()
 
 # Create some planets
 NUM_PLANETS = 1000
-omega = 0.02 # angular velocity
+omega = 0.03 # angular velocity
 
 for i in range(NUM_PLANETS):
     # Create random planet
-    planet = universe.randomPlanet()
+    planet = universe.random_planet()
     # Spin it around the origin a bit
     planet.velocity = F.rotation(planet.position*omega, math.pi/2)
    

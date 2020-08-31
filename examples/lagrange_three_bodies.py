@@ -17,7 +17,8 @@ omega = 0.025
 for theta in angles:
     p = F.to_cartesian(r, theta)
     v = F.rotation(omega*np.array(p), pi/2)
-    Planet(universe, mass=10000, radius=5, position=p, velocity=v)
+    planet = Planet(universe, mass=10000, radius=5, position=p, velocity=v)
+    universe.add_planet(planet)
 
 #Simulate
 universe.simulate()
