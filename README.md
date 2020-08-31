@@ -45,7 +45,9 @@ universe.simulate()
 ```
 ## Example
 
-Cosmosim can model interactions between hundreds of objects:
+Cosmosim can model interactions between hundreds of objects.
+
+Create a cloud of planets:
 
 ```python
 from cosmosim.core.universe import Universe
@@ -71,6 +73,9 @@ for i in range(NUM_PLANETS):
 universe.simulate()
 ```
 
+Create a central "star" with a disk of planets around it:
+
+
 ```python
 from cosmosim.core.universe import Universe
 from cosmosim.util.functions import get_radius
@@ -87,7 +92,9 @@ STAR_POSITION = [0,0]
 STAR_NAME = "Sol"
 STAR_COLOR = (255,255,0) # yellow
 IMMOBILE = True
-star = universe.create_planet(STAR_MASS, STAR_RADIUS, STAR_POSITION, 
+star = universe.create_planet(STAR_MASS, 
+                              STAR_RADIUS, 
+                              STAR_POSITION, 
                               immobile=IMMOBILE,
                               name=STAR_NAME, 
                               color=STAR_COLOR)
