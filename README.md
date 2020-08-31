@@ -49,7 +49,7 @@ Cosmosim can model interactions between hundreds of objects:
 
 ```python
 from cosmosim.core.universe import Universe
-import cosmosim.util.functions as F
+from cosmosim.util.functions import rotation
 import math
  
 # Create the universe
@@ -63,9 +63,11 @@ for i in range(NUM_PLANETS):
     # Create random planet
     planet = universe.random_planet()
     # Spin it around the origin a bit
-    planet.velocity = F.rotation(planet.position*omega, math.pi/2)
+    v = planet.position * omega
+    theta = math.pi/2 # 90 degrees
+    planet.velocity = rotation(v, theta)
    
-#Simulate
+# Simulate
 universe.simulate()
 ```
 
