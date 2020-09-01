@@ -2,6 +2,10 @@ from cosmosim.core.universe import Universe
 from cosmosim.core.planet import Planet
 import cosmosim.util.functions as F
 
+# =============================================================================
+# A "to scale" model of the Earth and Moon
+# =============================================================================
+
 # Create the universe
 universe = Universe()
 

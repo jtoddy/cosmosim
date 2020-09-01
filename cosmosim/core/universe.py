@@ -16,11 +16,13 @@ class Universe:
     def __init__(self, G=1):
         self.G = G
         self.planets = []
-        self.angular_momenta = np.array([0])
+        self.angular_momentum = 0.0
+        self.total_energy = 0.0
         self.clicked_planet = None
         self.running = False
         self.paused = False
         self.dragging = False
+        self.iterations = 0
         # initialize buttons
         self.close_btn = None
         self.track_btn = None
@@ -35,7 +37,9 @@ class Universe:
         self.add_planet(planet)
         return planet
         
-    def random_planet(self, density=1, min_mass=1, max_mass=100, dmin=0, dmax=500, min_velocity=1.0, max_velocity=3.0, name=None, color=None):
+    def random_planet(self, density=1, min_mass=1, max_mass=100, dmin=0, 
+                      dmax=500, min_velocity=1.0, max_velocity=3.0, 
+                      name=None, color=None):
         mass = random.randint(min_mass, max_mass)
         radius = F.get_radius(mass,density)
         ppolar = [random.randint(dmin,dmax), random.random()*(2*math.pi)]
@@ -43,7 +47,8 @@ class Universe:
         v0 = min_velocity + (max_velocity - min_velocity) * random.random()
         v_theta = 2*math.pi * random.random()
         velocity = [v0*math.cos(v_theta),v0*math.sin(v_theta)]
-        return self.create_planet(mass=mass,radius=radius,position=position,velocity=velocity,color=color,name=name)
+        return self.create_planet(mass=mass,radius=radius,position=position,
+                                  velocity=velocity,color=color,name=name)
     
     def active_planets(self):
         return [planet for planet in self.planets if planet.alive]
@@ -57,14 +62,18 @@ class Universe:
     def unbound_planets(self):
         return [planet for planet in self.active_planets() if planet.energy >= 0]
     
-    def net_angular_momentum(self):
-        return abs(np.sum(self.angular_momenta))
-    
-    def simulate(self, width=1600, height=1000, speed=1, fps=33, trail_length=1000, collisions=True):
+    def simulate(self, width=1600, height=1000, speed=1, fps=33, 
+                 trail_length=1000, collisions=True, 
+                 track_all=False, run_while=(lambda x: True)):
         
         self.context = {"scale":1.0, 
                         "offset":np.array([0.0,0.0]), 
                         "origin":np.array([width/2,height/2])}
+        
+        # This kills performance...
+        if track_all:
+            for p in self.planets:
+                p.tracked = True
         
         # Set up display
         pygame.init()
@@ -77,11 +86,11 @@ class Universe:
         dt = speed/20
         dt_default = dt
         self.running = True
-        while self.running:
-            
+        while self.running and run_while(self):
+            # Identify active planets
+            active_planets = self.active_planets()
             # Clear the screen
             screen.fill(BLACK)
-            
             # Handle user inputs
             for event in pygame.event.get():
                 # Stop simulation when user quits
@@ -144,7 +153,7 @@ class Universe:
                             self.clicked_planet = None
                         # Click on planet
                         else:
-                            clicked_planets = [p for p in self.active_planets() if np.linalg.norm(F.screen_coordinates(p.position, **self.context) - pos) <= p.radius*self.context['scale']]
+                            clicked_planets = [p for p in active_planets if np.linalg.norm(F.screen_coordinates(p.position, **self.context) - pos) <= p.radius*self.context['scale']]
                             if len(clicked_planets) > 0:
                                 if self.clicked_planet:
                                     self.clicked_planet.clicked = False
@@ -161,7 +170,6 @@ class Universe:
                     pass
             
             # Simulate gravitational interactions between planets
-            active_planets = self.active_planets()
             if not self.paused:
                 # Initial conditions
                 m = np.array([p.mass for p in active_planets])
@@ -173,18 +181,20 @@ class Universe:
                 # Integration
                 v = v0 + a*dt
                 p = p0 + v*dt
-                # Calculate energies and gravitational potential
-                a_mag = np.linalg.norm(a, axis=1)
-                V = -np.sqrt(self.G*a_mag*(np.sum(m)-m))
-                U = m * V
-                K = 0.5*m*(np.linalg.norm(v, axis=1)**2)
+                # Calculate energies
+                d = pairwise_distances(p)
+                d_inv = np.reciprocal(d, where=(d!=0))
+                v_mag = np.linalg.norm(v, axis=1)
+                G = -self.G*np.multiply.outer(m,m)
+                U = np.sum(G*d_inv, axis=1)
+                K = 0.5*m*(v_mag**2)
+                self.total_energy = np.sum(K + U)
                 # Calculate angular momenta
-                self.angular_momenta = p*(np.dot(v, [F.get_tangent(p) for p in p]))*m[:,np.newaxis]
+                self.angular_momentum = np.sum(m*np.cross(p,v))
                 # Identify collisions
                 if collisions:
-                    r = np.array([p.radius for p in active_planets])
-                    d = pairwise_distances(p)
-                    collision_matrix = d <= np.add.outer(r,r)
+                    radii = np.array([p.radius for p in active_planets])
+                    collision_matrix = d <= np.add.outer(radii,radii)
                 
             # Update planet properties and draw
             for i, planet in enumerate(active_planets):
@@ -214,7 +224,8 @@ class Universe:
             "Bound Planets: " + str(len(self.bound_planets())),
             "Escaped Planets: " + str(len(self.unbound_planets())),
             "Destroyed Planets: " + str(len(self.absorbed_planets())),
-            "Net Angular Momentum: {:.2e}".format(self.net_angular_momentum()),
+            "Net Angular Momentum: {:.2e}".format(self.angular_momentum),
+            "Total Energy: {:.2e}".format(self.total_energy)
             ]
             
             for i, text in enumerate(universe_text):
@@ -226,7 +237,7 @@ class Universe:
                 if self.clicked_planet.alive:
                     # Info box dimensions
                     INFO_X = 10
-                    INFO_Y = 130
+                    INFO_Y = 150
                     INFO_WIDTH = 240
                     INFO_HEIGHT = 150
                     BTN_SIZE = 30
@@ -304,5 +315,8 @@ class Universe:
             # Update display
             pygame.display.flip()
             clock.tick(fps)
+            
+            # Update iterations
+            self.iterations += 1
             
         pygame.quit()        

@@ -49,7 +49,12 @@ class Planet:
         pos = F.to_cartesian(distance, theta)[::-1]
         pos_norm = pos/np.linalg.norm(pos)
         v = F.rotation(v_mag*pos_norm,math.pi/2)
-        return self.universe.create_planet(mass=mass, radius=radius, position=pos, velocity=v, name=name, color=color)
+        return self.universe.create_planet(mass=mass,
+                                           radius=radius,
+                                           position=pos,
+                                           velocity=v,
+                                           name=name,
+                                           color=color)
             
     def update_history(self, trail_length):
         if self.alive and self.tracked:
@@ -69,7 +74,6 @@ class Planet:
             self.mass += planet.mass
             self.volume += planet.volume
             self.radius = ((3*self.volume)/(4*math.pi))**(1/3)
-            #self.color = tuple(map(lambda i, j: ((i*self.mass) + (j*planet.mass))/(self.mass + planet.mass), self.color, planet.color))
             planet.destroy()
             self.planets_eaten += 1 + planet.planets_eaten
         

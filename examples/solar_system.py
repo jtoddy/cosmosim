@@ -1,6 +1,11 @@
 from cosmosim.core.universe import Universe 
 from cosmosim.core.planet import Planet
 import cosmosim.util.functions as F
+
+# =============================================================================
+# A "roughly to scale" model of the solar system.
+# Moons and pluto are not included.
+# =============================================================================
  
 # Create the universe
 universe = Universe()
