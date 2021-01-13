@@ -27,7 +27,7 @@ PLANET_DENSITY = 1
 D_MAX = 1000
 D_MIN = 300
 MIN_MASS = 1
-MAX_MASS = 10
+MAX_MASS = 100
 
 for i in range(NUM_PLANETS):
     PLANET_DISTANCE = random.randint(D_MIN, D_MAX)

@@ -7,7 +7,7 @@ universe = Universe()
 
 # Create some planets
 NUM_PLANETS = 1000
-omega = 0.03 # angular velocity
+omega = 0.02 # angular velocity
 
 for i in range(NUM_PLANETS):
     # Create random planet
