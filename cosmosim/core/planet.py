@@ -9,6 +9,12 @@ WHITE = (255,255,255)
 YELLOW = (255,255,0)
 BLACK = (0,0,0)
 
+AU = 1.496e11   # Astronomical unit
+ME = 5.972e24   # Mass of the Earth
+RE = 6.371e6    # Radius of the earth
+MS = 1.989e30   # Mass of the sun
+RS = 6.9634e8   # Radius of the sun
+
 class Planet:
     
     def __init__(self, mass, radius, position, velocity=[0.0,0.0], color=None, immobile=False, name=None, universe=None):

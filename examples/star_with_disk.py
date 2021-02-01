@@ -2,17 +2,22 @@ from cosmosim.core.universe import Universe
 from cosmosim.util.functions import get_radius
 import random
 
+AU = 1.496e11   # Astronomical unit
+ME = 5.972e24   # Mass of the Earth
+RE = 6.371e6    # Radius of the earth
+MS = 1.989e30   # Mass of the sun
+RS = 6.9634e8   # Radius of the sun
+
 # Create the universe
 universe = Universe()
 
 # Create a star
-STAR_DENSITY = 1
-STAR_MASS = 300000
-STAR_RADIUS = get_radius(STAR_MASS, STAR_DENSITY)
+STAR_MASS = MS
+STAR_RADIUS = RS
 STAR_POSITION = [0,0]
 STAR_NAME = "Sol"
 STAR_COLOR = (255,255,0) # yellow
-IMMOBILE = True
+IMMOBILE = False
 
 star = universe.create_planet(mass=STAR_MASS, 
                               radius=STAR_RADIUS, 
@@ -23,11 +28,11 @@ star = universe.create_planet(mass=STAR_MASS,
 
 # Create some planets in a disk around the star
 NUM_PLANETS = 1000
-PLANET_DENSITY = 1
-D_MAX = 1000
-D_MIN = 300
-MIN_MASS = 1
-MAX_MASS = 100
+PLANET_DENSITY = 3000
+D_MIN = 0.05*AU
+D_MAX = 1*AU
+MIN_MASS = 0.1*ME
+MAX_MASS = 10*ME
 
 for i in range(NUM_PLANETS):
     PLANET_DISTANCE = random.randint(D_MIN, D_MAX)
@@ -38,4 +43,4 @@ for i in range(NUM_PLANETS):
                           radius=PLANET_RADIUS)
    
 #Simulate
-universe.simulate()
+universe.simulate(speed=1e4,scale=1e-8)

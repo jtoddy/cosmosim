@@ -6,14 +6,22 @@ import cosmosim.util.functions as F
 from cosmosim.util.blas import acc_blas
 from cosmosim.core.planet import Planet
 from sklearn.metrics import pairwise_distances
+import time
 
 WHITE = (255,255,255)
 YELLOW = (255,255,0)
 BLACK = (0,0,0)
 
+AU = 1.496e11       # Astronomical unit
+ME = 5.972e24       # Mass of the Earth
+RE = 6.371e6        # Radius of the earth
+MS = 1.989e30       # Mass of the sun
+RS = 6.9634e8       # Radius of the sun
+DAYTIME = 86400     # Seconds in a day
+
 class Universe:
     
-    def __init__(self, G=1):
+    def __init__(self, G=6.674e-11):
         self.G = G
         self.planets = []
         self.angular_momentum = 0.0
@@ -37,8 +45,8 @@ class Universe:
         self.add_planet(planet)
         return planet
         
-    def random_planet(self, density=1, min_mass=1, max_mass=100, dmin=0, 
-                      dmax=500, min_velocity=1.0, max_velocity=3.0, 
+    def random_planet(self, density=4000, min_mass=0.1*ME, max_mass=1000*ME, dmin=0, 
+                      dmax=50*AU, min_velocity=0, max_velocity=5e4, 
                       name=None, color=None):
         mass = random.randint(min_mass, max_mass)
         radius = F.get_radius(mass,density)
@@ -99,8 +107,8 @@ class Universe:
             # Right click resets view
             elif event.button == 3:
                 self.context['offset']  = np.array([0.0,0.0])
-                self.context['scale']  = 1.0
-                self.dt = dt_default
+                self.context['scale']  = self.default_scale
+                self.dt = self.dt_default
             # Wheel up zooms in 5%
             elif event.button == 4:
                 self.context['scale']  *= 1.05 
@@ -129,7 +137,7 @@ class Universe:
                     self.clicked_planet = None
                 # Click on planet
                 else:
-                    clicked_planets = [p for p in self.get_active_planets() if np.linalg.norm(F.screen_coordinates(p.position, **self.context) - pos) <= p.radius*self.context['scale']]
+                    clicked_planets = [p for p in self.get_active_planets() if np.linalg.norm(F.screen_coordinates(p.position, **self.context) - pos) <= max(p.radius*self.context['scale'],10.0)]
                     if len(clicked_planets) > 0:
                         if self.clicked_planet:
                             self.clicked_planet.clicked = False
@@ -159,13 +167,13 @@ class Universe:
             v = v0 + a*self.dt
             p = p0 + v*self.dt
             # Calculate energies
-            d_raw = pairwise_distances(p, n_jobs=-1)
-            d = np.clip(d_raw, 1e-9, None) # Clip to avoid overflows
+            d = np.clip(pairwise_distances(p, n_jobs=-1), 1, None)
             d_inv = np.reciprocal(d, where=(d!=0))
-            v_mag = np.linalg.norm(v, axis=1)
-            G = -self.G*np.multiply.outer(m,m)
-            U = np.sum(G*d_inv, axis=1)
-            K = 0.5*m*(v_mag**2)
+            v_mag = np.linalg.norm(v.astype(float), axis=1)
+            V = -self.G*m*d_inv
+            np.fill_diagonal(V, 0.0)
+            U = m*np.sum(V, axis=1)
+            K = 0.5*m*np.square(v_mag)
             self.total_energy = np.sum(K + U)
             # Calculate angular momenta
             self.angular_momentum = np.sum(m*np.cross(p,v))
@@ -173,7 +181,8 @@ class Universe:
             if self.collisions:
                 radii = np.array([p.radius for p in self.active_planets])
                 collision_matrix = d <= np.add.outer(radii,radii)
-        # Update planets
+            
+        # Update planets 
         for i, planet in enumerate(self.active_planets):
             if not self.paused:
                 if planet.alive:
@@ -190,11 +199,8 @@ class Universe:
                                     other_planet.absorb(planet)
                     planet.energy =  K[i] + U[i]
                 planet.update_history(self.trail_length)
-        
-    def draw_planets(self):
-        for planet in self.active_planets:
             planet.draw(self.screen, planet.color)
-            
+                 
     def update_universe_info_text(self):
         universe_text = [
             "Total Planets: " + str(len(self.active_planets)), 
@@ -215,7 +221,7 @@ class Universe:
                 # Info box dimensions
                 INFO_X = 10
                 INFO_Y = 150
-                INFO_WIDTH = 240
+                INFO_WIDTH = 370
                 INFO_HEIGHT = 150
                 BTN_SIZE = 30
                 TXT_PAD = 10
@@ -249,9 +255,9 @@ class Universe:
                 
                 # Planet info text
                 ptext1 = self.clicked_planet.name.upper()
-                ptext2 = "Mass: %.0f" % round(self.clicked_planet.mass,2) 
-                ptext3 = "Radius: %.2f" % self.clicked_planet.radius
-                ptext4 = "Velocity: [%.2f %.2f] %.2f" % (*self.clicked_planet.velocity, np.linalg.norm(self.clicked_planet.velocity))
+                ptext2 = "Mass: {:.2e} Earth masses".format(self.clicked_planet.mass/ME)
+                ptext3 = "Radius: {:.2e} km".format(self.clicked_planet.radius/1000)
+                ptext4 = "Velocity: [{:.2e}, {:.2e}] {:.2e} m/s".format(*self.clicked_planet.velocity, np.linalg.norm(self.clicked_planet.velocity))
                 ptext5 = "Energy: {:.2e}".format(round(self.clicked_planet.energy, 2))
                 ptext6 = "Planets eaten: %i" % self.clicked_planet.planets_eaten
                 pimg1 = self.font.render(ptext1, True, WHITE)
@@ -276,34 +282,38 @@ class Universe:
         effective_fps = 1/P
         fps_text = "FPS: %.0f" % effective_fps
         fps_img = self.font.render(fps_text, True, WHITE)
-        self.screen.blit(fps_img, (self.width*0.93, 20))
+        self.screen.blit(fps_img, (self.width*0.90, 20))
         # Update scale
         scale = self.context['scale']
-        scale_text = "Scale: %.2f" % scale
+        scale_text = "Scale: {:.2e}".format(scale)
         scale_img = self.font.render(scale_text, True, WHITE)
-        self.screen.blit(scale_img, (self.width*0.93, 40))
+        self.screen.blit(scale_img, (self.width*0.90, 40))
         # Update speed
-        speed = self.dt/self.dt_default
-        speed_text = "Speed: %.2f" % speed
+        speed_text = "Speed: %.2f" % round(self.speed,1)
         speed_img = self.font.render(speed_text, True, WHITE)
-        self.screen.blit(speed_img, (self.width*0.93, 60))
+        self.screen.blit(speed_img, (self.width*0.90, 60))
     
-    def simulate(self, width=1600, height=1000, speed=1, fps=33, 
+    def simulate(self, width=1600, height=1000, speed=1e4, fps=33, 
                  trail_length=1000, collisions=True, 
-                 track_all=False, run_while=(lambda x: True)):
+                 track_all=False, run_while=(lambda x: True), 
+                 scale=1e-7, start_paused=False):
         # Configure simulation
-        self.dt_default = speed/20
-        self.dt = self.dt_default
         self.collisions = collisions
         self.trail_length = trail_length
+        self.default_scale = scale
         self.width = width
         self.height = height
+        self.fps = fps
+        self.speed = speed
+        self.dt_default = speed/fps
+        self.dt = self.dt_default
+        self.paused = start_paused
         if track_all:
             for p in self.planets:
                 p.tracked = True
         # Initialize display context
         self.context = {
-            "scale":1.0,
+            "scale":self.default_scale,
             "offset":np.array([0.0,0.0]),
             "origin":np.array([width/2,height/2])
         }
@@ -325,8 +335,6 @@ class Universe:
                 self.handle_user_input(event)
             # Simulate gravitational interactions between planets
             self.interact()
-            # Draw planets
-            self.draw_planets()
             # Update universe info text
             self.update_universe_info_text()
             # Update clicked planet text
