@@ -21,8 +21,10 @@ DAYTIME = 86400     # Seconds in a day
 
 class Universe:
     
-    def __init__(self, G=6.674e-11):
+    def __init__(self, G=6.674e-11, bounded=True, r_max=100*AU):
         self.G = G
+        self.bounded = bounded
+        self.r_max = r_max
         self.planets = []
         self.angular_momentum = 0.0
         self.total_energy = 0.0
@@ -70,11 +72,19 @@ class Universe:
     def get_unbound_planets(self):
         return [planet for planet in self.get_active_planets() if planet.energy >= 0]
     
+    def get_escaped_planets(self):
+        return [planet for planet in self.get_active_planets() if np.linalg.norm(planet.position) > self.r_max]
+    
+    def destroy_escaped_planets(self):
+        for planet in self.escaped_planets:
+            planet.destroy()
+    
     def update_planet_lists(self):
         self.active_planets = self.get_active_planets()
         self.absorbed_planets = self.get_absorbed_planets()
         self.bound_planets = self.get_bound_planets()
         self.unbound_planets = self.get_unbound_planets()
+        self.escaped_planets = self.get_escaped_planets()
         
     def handle_user_input(self, event):
         # Stop simulation when user quits
@@ -293,7 +303,7 @@ class Universe:
         speed_img = self.font.render(speed_text, True, WHITE)
         self.screen.blit(speed_img, (self.width*0.90, 60))
     
-    def simulate(self, width=1600, height=1000, speed=1e4, fps=33, 
+    def simulate(self, width=1600, height=1000, speed=1e6, fps=33, 
                  trail_length=1000, collisions=True, 
                  track_all=False, run_while=(lambda x: True), 
                  scale=1e-7, start_paused=False):
@@ -328,13 +338,16 @@ class Universe:
         while self.running and run_while(self):
             # Clear the screen
             self.screen.fill(BLACK)
-            # Update planet lists
-            self.update_planet_lists()
             # Handle user inputs
             for event in pygame.event.get():
                 self.handle_user_input(event)
+            # Update planet lists
+            self.update_planet_lists()
             # Simulate gravitational interactions between planets
             self.interact()
+            # Destroy escaped planets
+            if self.bounded:
+                self.destroy_escaped_planets()
             # Update universe info text
             self.update_universe_info_text()
             # Update clicked planet text

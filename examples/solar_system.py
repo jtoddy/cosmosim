@@ -86,5 +86,10 @@ for planet in planets:
     sol.create_satellite(**planet)
 
 #Simulate 
+SIMULATION_PARAMS = {
+    "speed": 300,
+    "scale": 2e-6,
+    "track_all": True
+}
 universe.simulate()
 

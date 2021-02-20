@@ -32,7 +32,7 @@ PLANET_DENSITY = 3000
 D_MIN = 0.05*AU
 D_MAX = 1*AU
 MIN_MASS = 0.1*ME
-MAX_MASS = 10*ME
+MAX_MASS = 100*ME
 
 for i in range(NUM_PLANETS):
     PLANET_DISTANCE = random.randint(D_MIN, D_MAX)
@@ -43,4 +43,4 @@ for i in range(NUM_PLANETS):
                           radius=PLANET_RADIUS)
    
 #Simulate
-universe.simulate(speed=1e4,scale=1e-8)
+universe.simulate(scale=2e-9)

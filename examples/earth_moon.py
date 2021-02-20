@@ -39,8 +39,12 @@ ISS_PARAMS = {
     "radius": 100,
     "name": "ISS"
 }
-
 iss = earth.create_satellite(**ISS_PARAMS)
    
 #Simulate
-universe.simulate()
+SIMULATION_PARAMS = {
+    "speed": 300,
+    "scale": 1.3e-6,
+    "track_all": True
+}
+universe.simulate(**SIMULATION_PARAMS)
