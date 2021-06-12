@@ -93,7 +93,7 @@ class Planet:
     def draw(self, screen, color):
         scale = self.universe.context['scale']
         # Set the radius of the planet
-        radius = int(self.radius*scale)
+        radius = max(1, int(self.radius*scale))
         # Draw
         if self.alive:
             q = F.screen_coordinates(self.position, **self.universe.context) 

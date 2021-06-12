@@ -17,7 +17,7 @@ STAR_RADIUS = RS
 STAR_POSITION = [0,0]
 STAR_NAME = "Sol"
 STAR_COLOR = (255,255,0) # yellow
-IMMOBILE = False
+IMMOBILE = True
 
 star = universe.create_planet(mass=STAR_MASS, 
                               radius=STAR_RADIUS, 
