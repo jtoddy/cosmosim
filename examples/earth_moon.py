@@ -1,33 +1,50 @@
 from cosmosim.core.universe import Universe 
 from cosmosim.core.planet import Planet
-import cosmosim.util.functions as F
 
 # =============================================================================
-# A "to scale" model of the Earth and Moon
+# A model of the Earth and Moon
 # =============================================================================
+
+ME = 5.972e24       # Mass of the Earth
+RE = 6.371e6        # Radius of the earth
 
 # Create the universe
 universe = Universe()
 
 # Create the Earth
-EARTH_DENSITY = 1
-EARTH_MASS = 8000
-EARTH_RADIUS = F.get_radius(EARTH_MASS, EARTH_DENSITY)
-EARTH_POSITION = [0,0]
-EARTH_NAME = "Terra"
-EARTH_COLOR = (3, 90, 252)
-IMMOBILE = True
-earth = Planet(EARTH_MASS, EARTH_RADIUS, EARTH_POSITION, immobile=IMMOBILE, name=EARTH_NAME, color=EARTH_COLOR)
+EARTH_PARAMS = {
+    "mass": ME,
+    "radius": RE,
+    "name": "Terra",
+    "position": [0,0],
+    "color":  (3, 90, 252)
+}
+earth = Planet(**EARTH_PARAMS)
 universe.add_planet(earth)
 
 # Create the moon
-MOON_DISTANCE = 62*EARTH_RADIUS
-MOON_MASS = EARTH_MASS/80
-MOON_RADIUS = F.get_radius(MOON_MASS, 1)
-MOON_NAME = "Luna"
-MOON_COLOR = (136, 138, 143)
-moon = earth.create_satellite(distance=MOON_DISTANCE,mass=MOON_MASS,radius=MOON_RADIUS,name=MOON_NAME, color=MOON_COLOR)
-universe.add_planet(moon)
+MOON_PARAMS = {
+    "distance": 62*RE,
+    "mass": 7.3459e22,
+    "radius": 1.7374e6,
+    "name": "Luna",
+    "color": (136, 138, 143)
+}
+moon = earth.create_satellite(**MOON_PARAMS)
+
+# Create the ISS
+ISS_PARAMS = {
+    "distance":7e6,
+    "mass": 4.5e6,
+    "radius": 100,
+    "name": "ISS"
+}
+iss = earth.create_satellite(**ISS_PARAMS)
    
 #Simulate
-universe.simulate()
+SIMULATION_PARAMS = {
+    "speed": 300,
+    "scale": 1.3e-6,
+    "track_all": True
+}
+universe.simulate(**SIMULATION_PARAMS)

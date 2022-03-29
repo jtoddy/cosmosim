@@ -10,22 +10,28 @@ import numpy as np
 # Could probably be tuned a bit more
 # =============================================================================
 
+ME = 5.972e24       # Mass of the Earth
+RE = 6.371e6        # Radius of the earth
+
 # Create the universe
-G = 1
-universe = Universe(G=G)
+universe = Universe()
+G = universe.G
 
 #Add planets
 pi = math.pi
 angles = [0.0, 2*pi/3, 4*pi/3]
-r = 100
-m = 10000
-omega = math.sqrt((G*m)/(math.sqrt(3)*r**3))
-print("Angular velocity: %f" % omega)
+r = 10*RE
+omega = math.sqrt((G*ME)/(math.sqrt(3)*r**3))
 for theta in angles:
     p = F.to_cartesian(r, theta)
     v = F.rotation(omega*np.array(p), pi/2)
-    planet = Planet(mass=m, radius=10, position=p, velocity=v)
+    planet = Planet(mass=ME, radius=RE, position=p, velocity=v)
     universe.add_planet(planet)
-
+    
 #Simulate
-universe.simulate(track_all=True)
+SIMULATION_PARAMS = {
+    "speed": 1e4,
+    "scale": 3.51e-6,
+    "track_all": True
+}
+universe.simulate(**SIMULATION_PARAMS)
