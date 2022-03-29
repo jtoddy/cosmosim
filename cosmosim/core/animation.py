@@ -1,60 +1,18 @@
-from cosmosim.core.new import UniverseState
 import cosmosim.util.functions as F
-import math
 import os
 import pickle
 import pygame
 import numpy as np
-import copy
+import datetime
 from tqdm import tqdm
+from matplotlib import pyplot as plt
+from matplotlib.animation import FuncAnimation, writers
 
 WHITE = (255,255,255)
 YELLOW = (255,255,0)
 BLACK = (0,0,0)
-
-AU = 1.496e11       # Astronomical unit
-ME = 5.972e24       # Mass of the Earth
-RE = 6.371e6        # Radius of the earth
-MS = 1.989e30       # Mass of the sun
-RS = 6.9634e8       # Radius of the sun
-DAYTIME = 86400     # Seconds in a day
-_G = 6.674e-11      # Gravitational constant
-
-
-class Simulation:
-    
-    def __init__(self, objects, dt, iterations, outpath=None, filesize=1000):
-        self.objects = objects
-        self.dt = dt
-        self.iterations = iterations
-        self.outpath = outpath
-        self.filesize = filesize
-               
-    def run(self):
-        state = UniverseState(self.objects)
-        nfiles = math.ceil(self.iterations/self.filesize)
-        elapsed = 0
-        if self.outpath:
-            if not os.path.isdir(self.outpath):
-                os.mkdir(self.outpath)
-            for n in range(nfiles): 
-                path = self.outpath + f"{n}.dat"
-                for i in tqdm(range(self.filesize), desc=f"Writing file {n}"):
-                    state.interact(self.dt)
-                    with open(path, "ab+") as f:
-                        state.save(f)
-                    elapsed += 1
-                    if elapsed >= self.iterations:
-                        break
-        else:
-            states = []
-            for i in tqdm(range(self.iterations), desc="Running simulation"):
-                state.interact(self.dt)
-                new_state = copy.deepcopy(state)
-                states.append(new_state)
-            return states
-                
-class Animation:
+          
+class InteractiveAnimation:
     
     def __init__(self, data, width=1600, height=1000, fps=60, scale=1.3e-6):
         self.width = width
@@ -87,14 +45,17 @@ class Animation:
             self.states = data
             
         self.frames = len(self.states)
+        self.dt = self.states[0].dt
                     
     def draw(self, state):
-        objects = state.existing_objects()
+        objects = state.objects
         scale = self.context['scale']
         for obj in objects:
             radius = max(1, int(obj.get_radius()*scale))
             q = F.screen_coordinates_3d(obj.position, **self.context)
-            pygame.draw.circle(self.screen, obj.color, q.astype(int), radius)
+            if self.onscreen(q):
+                pygame.draw.circle(self.screen, obj.color, q.astype(int), radius)
+    
             
     def handle_user_input(self, event):
         # Stop simulation when user quits
@@ -145,25 +106,35 @@ class Animation:
                 self.context['rotation'] += np.array([dtheta,dphi])
         else:
             pass
+        
+    def onscreen(self, coordinates):
+        x, y = coordinates
+        return (x >= 0 and x <= self.width and y >= 0 and y <= self.height)
+        
             
     def update_simulation_text(self):
         # Update FPS
-        P = (self.clock.get_time() + 1)/1000
-        effective_fps = 1/P
+        effective_fps = self.clock.get_fps()
         fps_text = "FPS: %.0f" % effective_fps
         fps_img = self.font.render(fps_text, True, WHITE)
-        self.screen.blit(fps_img, (self.width*0.90, 20))
+        self.screen.blit(fps_img, (self.width*0.85, 20))
         # Update scale
         scale = self.context['scale']
         scale_text = "Scale: {:.2e}".format(scale)
         scale_img = self.font.render(scale_text, True, WHITE)
-        self.screen.blit(scale_img, (self.width*0.90, 40))
+        self.screen.blit(scale_img, (self.width*0.85, 40))
         # Update iterations
         iterations = self.iterations
         frames = self.frames
         iterations_text = f"Iterations: {iterations}/{frames}"
         iterations_img = self.font.render(iterations_text, True, WHITE)
-        self.screen.blit(iterations_img, (self.width*0.90, 60))
+        self.screen.blit(iterations_img, (self.width*0.85, 60))
+        # Update elapsed time
+        elapsed_time = iterations*self.dt
+        elapsed_time_formatted = str(datetime.timedelta(seconds=elapsed_time))
+        elapsed_time_text = f"Elapsed time: {elapsed_time_formatted}"
+        elapsed_time_img = self.font.render(elapsed_time_text, True, WHITE)
+        self.screen.blit(elapsed_time_img, (self.width*0.85, 80))
         # Paused text
         if self.paused:
             paused_text = "PAUSED"
@@ -175,6 +146,7 @@ class Animation:
         pygame.display.set_caption('cosmosim 0.10')
         self.clock = pygame.time.Clock()
         self.screen = pygame.display.set_mode([self.width, self.height])
+        self.screen.set_alpha(None)
         self.font = pygame.font.SysFont(None, 24)
         self.running = True
         self.iterations = 0
@@ -197,6 +169,100 @@ class Animation:
                     self.clock.tick(self.fps)
                     new_state = False
                 self.iterations += 1
-            self.running = False
+            self.iterations = 0
         pygame.quit()
         
+
+class MP4Animation:
+    
+    def __init__(self, data, width=1000, height=1000, fps=60, scale=1.3e-6, n_frames=None):
+        self.width = width
+        self.height = height
+        self.fps = fps
+        self.default_scale = scale
+        self.scale = scale        
+        self.paused = False
+        self.dragging = False
+        self.context = {
+            "scale":self.scale,
+            "offset":np.array([0.0,0.0]),
+            "rotation":np.array([0.0, 0.0]),
+            "origin":np.array([self.width/2,self.height/2])
+        }
+        
+        if isinstance(data, str):
+            self.states = []
+            path = data
+            self.filelist = os.listdir(path)
+            loaded_frames = 0
+            for i in tqdm(self.filelist, desc="Loading data"):
+                with open(path + i, 'rb') as f:
+                    while (not n_frames or loaded_frames < n_frames):
+                        try:
+                            state = pickle.load(f)
+                            self.states.append(state)
+                            loaded_frames += 1
+                        except EOFError:
+                            break
+        else:
+            self.states = data
+            
+        self.frames = n_frames or len(self.states)
+        self.dt = self.states[0].dt
+        px = 1/plt.rcParams['figure.dpi']  # pixel in inches
+        figsize=(self.width*px, self.height*px, )
+        self.fig = plt.figure(figsize=figsize)
+        self.fig.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=None, hspace=None)
+        self.ax = plt.axes(xlim=(0,width), ylim=(0,height))
+        self.ax.set_facecolor("black")
+        self.space = plt.scatter([],[],[],[])
+        self.text = self.ax.text(self.width*0.85, self.height - 40, "", color="white")
+    
+    def init(self):
+        self.space.set_offsets([])
+        self.text.set_text("")
+        return self.space, self.text
+    
+    def info_text(self, i):
+        # Update scale
+        scale = self.context['scale']
+        scale_text = "Scale: {:.2e}".format(scale)
+        # Update iterations
+        iterations = i
+        frames = self.frames
+        iterations_text = f"Frame: {iterations}/{frames}"
+        # Update elapsed time
+        elapsed_time = iterations*self.dt
+        elapsed_time_formatted = str(datetime.timedelta(seconds=elapsed_time))
+        elapsed_time_text = f"Elapsed time: {elapsed_time_formatted}"
+        
+        info_text = f"""{scale_text}
+{iterations_text}
+{elapsed_time_text}"""
+
+        return info_text
+        
+        
+    def animate(self, i):
+        print(f"Rendering frame: {i+1}/{self.frames}")
+        state = self.states[i]
+        scale = self.context['scale']
+        positions = [F.screen_coordinates_3d(p, **self.context) for p in state.positions()]
+        radii = [max(1, int(r*scale)) for r in state.radii()]
+        colors = [(c[0]/255, c[1]/255, c[2]/255) for c in state.colors()]
+        self.space.set_offsets(positions)
+        self.space.set_sizes(radii)
+        self.space.set_edgecolors(colors)
+        info_text = self.info_text(i)
+        self.text.set_text(info_text)
+        return self.space, self.text
+    
+    def run(self):
+        writer = writers['ffmpeg']
+        writer = writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
+        anim = FuncAnimation(self.fig, 
+                             self.animate, 
+                             frames=self.frames,
+                             interval=20)
+        print("saving")
+        anim.save("C:/test_data/cosmosim/animation.mp4")
