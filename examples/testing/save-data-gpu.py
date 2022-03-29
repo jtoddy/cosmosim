@@ -1,4 +1,4 @@
-from cosmosim.core.universe import Object, Universe
+from cosmosim.core.universe_gpu import Object, Universe
 import random
 
 AU = 1.496e11   # Astronomical unit
@@ -37,7 +37,7 @@ for i in range(NUM_PLANETS):
     planets.append(p)
    
 #Simulate
-path = "C:/test_data/cosmosim/test_run/"
+path = "C:/test_data/cosmosim/test_run_gpu/"
 iterations = 1000
 dt = 600
 objects = [star, *planets]
