@@ -115,7 +115,7 @@ class State:
         radii = self.get_radii()
         collision_matrix = d <= np.add.outer(radii,radii)
         absorbed = []
-        for i in range(collision_matrix.shape[0]):
+        for i in range(self.n_objects):
             if i not in absorbed:
                 for j, c in enumerate(collision_matrix[i]):
                         if c and i != j and j not in absorbed:
@@ -125,17 +125,20 @@ class State:
                             else:
                                 self.collide(j,i)
                                 absorbed.append(i)
-        k = 0
-        for i in absorbed:
-            i -= k
-            self.masses = np.delete(self.masses, i)
-            self.positions = np.delete(self.positions, i, axis=0)
-            self.velocities = np.delete(self.velocities, i, axis=0)
-            self.densities = np.delete(self.densities, i)
-            del self.names[i]
-            del self.colors[i]
-            self.n_objects -= 1
-            k += 1
+        self.masses = np.delete(self.masses, absorbed)
+        self.positions = np.delete(self.positions, absorbed, axis=0)
+        self.velocities = np.delete(self.velocities, absorbed, axis=0)
+        self.densities = np.delete(self.densities, absorbed)
+        for i in sorted(absorbed, reverse=True):
+            try:
+                del self.names[i]
+                del self.colors[i]
+            except Exception as e:
+                print(i)
+                print(self.n_objects)
+                print(collision_matrix.shape)
+                raise(e)
+        self.n_objects -= len(absorbed)
             
     def interact(self, collisions=True, G=_G):
         a = self.get_acc(G)
@@ -159,7 +162,7 @@ class Universe:
         self.filesize = filesize
         print(outpath)
                
-    def run(self):
+    def run(self, collisions=True):
         state = State(self.objects, dt=self.dt)
         nfiles = math.ceil(self.iterations/self.filesize)
         elapsed = 0
@@ -173,7 +176,7 @@ class Universe:
             for n in range(nfiles): 
                 path = self.outpath + f"{n}.dat"
                 for i in tqdm(range(min(self.filesize, self.iterations)), desc=f"Writing file {n}"):
-                    state.interact(self.dt)
+                    state.interact(collisions)
                     with open(path, "ab+") as f:
                         state.save(f)
                     elapsed += 1

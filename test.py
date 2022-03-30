@@ -1,6 +1,7 @@
 from cosmosim.core.universe2 import Object, Universe
 from cosmosim.core.animation2 import  MP4Animation, InteractiveAnimation
 import random
+import numpy as np
 
 AU = 1.496e11   # Astronomical unit
 ME = 5.972e24   # Mass of the Earth
@@ -38,16 +39,18 @@ for i in range(NUM_PLANETS):
     planets.append(p)
    
 #Simulate
-path = "~/test_data/cosmosim/test_run1/"
-iterations = 100
+path = "C:/test_data/cosmosim/test_run1/data/"
+iterations = 10000
 dt = 600
 objects = [star, *planets]
+collisions = True
 
 test_sim = Universe(objects, dt, iterations, path)
-test_sim.run()
+test_sim.run(collisions=collisions)
 
 scale=6.5e-9
-animation = MP4Animation(path, scale=scale)
-animation.run()
-# animation = InteractiveAnimation(path, scale=scale)
-# animation.play()
+rotation = np.array([3.14/4,3.14/4])
+# animation = MP4Animation(path, "C:/test_data/cosmosim/test_run1/animation/", scale=scale, context ={"rotation":rotation})
+# animation.run()
+animation = InteractiveAnimation(path, scale=scale)
+animation.play()

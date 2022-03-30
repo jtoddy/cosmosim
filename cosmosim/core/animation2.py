@@ -1,5 +1,6 @@
 import cosmosim.util.functions as F
 import os
+import sys
 import pickle
 import pygame
 import numpy as np
@@ -48,13 +49,14 @@ class InteractiveAnimation:
         self.dt = self.states[0].dt
                     
     def draw(self, state):
-        scale = self.context['scale']
         radii = state.get_radii()
         for i in range(state.n_objects):
-            radius = max(1, int(radii[i]*scale))
             q = F.screen_coordinates_3d(state.positions[i], **self.context)
             if self.onscreen(q):
-                pygame.draw.circle(self.screen, state.colors[i], q.astype(int), radius)
+                radius = max(1, int(radii[i]*self.context['scale']))
+                pygame.draw.circle(self.canvas, state.colors[i], q.astype(int), radius)
+        self.screen.blit(self.canvas, self.context['offset'])
+                
     
             
     def handle_user_input(self, event):
@@ -147,6 +149,7 @@ class InteractiveAnimation:
         self.clock = pygame.time.Clock()
         self.screen = pygame.display.set_mode([self.width, self.height])
         self.screen.set_alpha(None)
+        self.canvas = pygame.Surface((self.width, self.height))
         self.font = pygame.font.SysFont(None, 24)
         self.running = True
         self.iterations = 0
@@ -156,7 +159,7 @@ class InteractiveAnimation:
                 new_state = True
                 while self.running and (self.paused or new_state):
                     # Clear the screen
-                    self.screen.fill(BLACK)
+                    self.canvas.fill(BLACK)
                     # Handle user inputs
                     for event in pygame.event.get():
                         self.handle_user_input(event)
@@ -175,7 +178,7 @@ class InteractiveAnimation:
 
 class MP4Animation:
     
-    def __init__(self, data, width=1000, height=1000, fps=60, scale=1.3e-6, n_frames=None):
+    def __init__(self, data, outpath, width=1000, height=1000, fps=60, scale=1.3e-6, n_frames=None, context={}):
         self.width = width
         self.height = height
         self.fps = fps
@@ -183,11 +186,13 @@ class MP4Animation:
         self.scale = scale        
         self.paused = False
         self.dragging = False
+        self.outpath = outpath
         self.context = {
             "scale":self.scale,
             "offset":np.array([0.0,0.0]),
             "rotation":np.array([0.0, 0.0]),
-            "origin":np.array([self.width/2,self.height/2])
+            "origin":np.array([self.width/2,self.height/2]),
+            **context
         }
         
         if isinstance(data, str):
@@ -244,7 +249,7 @@ class MP4Animation:
         
         
     def animate(self, i):
-        print(f"Rendering frame: {i+1}/{self.frames}")
+        #print(f"Rendering frame: {i+1}/{self.frames}")
         state = self.states[i]
         scale = self.context['scale']
         positions = [F.screen_coordinates_3d(p, **self.context) for p in state.positions]
@@ -260,9 +265,15 @@ class MP4Animation:
     def run(self):
         writer = writers['ffmpeg']
         writer = writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
+        if not os.path.isdir(self.outpath):
+            os.makedirs(self.outpath)
+        existing_filelist = os.listdir(self.outpath)
+        for f in existing_filelist:
+            os.remove(self.outpath + f)
         anim = FuncAnimation(self.fig, 
                              self.animate, 
-                             frames=self.frames,
+                             frames=tqdm(range(self.frames), desc="Rendering MP4", file=sys.stdout),
                              interval=20)
         print("saving")
-        anim.save("C:/test_data/cosmosim/animation.mp4")
+        anim.save(self.outpath+"cosmosim.mp4")
+        print("Done!")
