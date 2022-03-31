@@ -34,6 +34,16 @@ def rotation_3d(v, theta, phi):
     R = np.matmul(Rtheta,Rphi)
     return np.matmul(R,v)
 
+def rotation_3d_multi(M, theta, phi):
+    Rtheta = np.array([[np.cos(theta), 0, np.sin(theta)],
+                      [0,1,0],
+                      [-np.sin(theta), 0, np.cos(theta)]])
+    Rphi = np.array([[1, 0, 0],
+                     [0, np.cos(phi), -np.sin(phi)],
+                     [0, np.sin(phi), np.cos(phi)]])
+    R = np.matmul(Rtheta,Rphi)
+    return R.dot(M.T).T
+
 def get_tangent(position, reference=[0,0]):
     R = np.array([[0,1],[-1,0]])
     dp = reference - position
@@ -54,3 +64,11 @@ def screen_coordinates_3d(p, scale, offset, rotation, origin):
     v1 = np.delete(v0, 2, 0)
     v = origin + (np.multiply(v1,np.array([1,-1]))*scale)+(offset*scale)
     return v
+
+def screen_coordinates_3d_multi(P, scale, offset, rotation, origin):
+    theta, phi = rotation
+    S0 = rotation_3d_multi(P, theta, phi)
+    S1 = np.delete(S0, 2, 1)
+    S2 = np.multiply(S1,np.array([1,-1]).T)*scale
+    S = S2+(origin+offset*scale)
+    return S

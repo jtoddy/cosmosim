@@ -115,7 +115,7 @@ class State:
         radii = self.get_radii()
         collision_matrix = d <= np.add.outer(radii,radii)
         absorbed = []
-        for i in range(self.n_objects):
+        for i in range(collision_matrix.shape[0]):
             if i not in absorbed:
                 for j, c in enumerate(collision_matrix[i]):
                         if c and i != j and j not in absorbed:
@@ -135,10 +135,11 @@ class State:
                 del self.colors[i]
             except Exception as e:
                 print(i)
+                print(len(colors))
                 print(self.n_objects)
                 print(collision_matrix.shape)
                 raise(e)
-        self.n_objects -= len(absorbed)
+        self.n_objects = len(self.masses)
             
     def interact(self, collisions=True, G=_G):
         a = self.get_acc(G)

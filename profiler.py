@@ -23,7 +23,7 @@ star = Object(mass=STAR_MASS,
                 color=STAR_COLOR)
 
 # Create some planets in a disk around the star
-NUM_PLANETS = 1000
+NUM_PLANETS = 3000
 PLANET_DENSITY = 300
 D_MIN = 0.1*AU
 D_MAX = 0.5*AU
@@ -40,18 +40,18 @@ for i in range(NUM_PLANETS):
     planets.append(p)
    
 #Simulate
-path = "C:/test_data/cosmosim/profiler_run/data/"
-iterations = 1000
+path = "~/test_data/cosmosim/profiler_run/data/"
+iterations = 10000
 dt = 600
 objects = [star, *planets]
 collisions = True
 
-test_sim = Universe(objects, dt, iterations, path)
-cProfile.run("test_sim.run(collisions=collisions)", "restats_gen")
+# test_sim = Universe(objects, dt, iterations, path)
+# cProfile.run("test_sim.run(collisions=collisions)", "restats_gen")
 
 scale=6.5e-9
 rotation = np.array([3.14/4,3.14/4])
 # animation = MP4Animation(path, "C:/test_data/cosmosim/test_run1/animation/", scale=scale, context ={"rotation":rotation})
 # animation.run()
-animation = InteractiveAnimation("C:/test_data/cosmosim/test_run1/data/", scale=scale)
+animation = InteractiveAnimation(path, scale=scale)
 cProfile.run('animation.play()', "restats_play")

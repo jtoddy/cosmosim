@@ -47,17 +47,17 @@ class InteractiveAnimation:
             
         self.frames = len(self.states)
         self.dt = self.states[0].dt
+        self.states.sort(key=lambda x: x.iterations)
                     
     def draw(self, state):
         radii = state.get_radii()
+        Q = F.screen_coordinates_3d_multi(state.positions, **self.context)
         for i in range(state.n_objects):
-            q = F.screen_coordinates_3d(state.positions[i], **self.context)
+            q = Q[i]
             if self.onscreen(q):
                 radius = max(1, int(radii[i]*self.context['scale']))
                 pygame.draw.circle(self.canvas, state.colors[i], q.astype(int), radius)
         self.screen.blit(self.canvas, self.context['offset'])
-                
-    
             
     def handle_user_input(self, event):
         # Stop simulation when user quits
@@ -78,6 +78,9 @@ class InteractiveAnimation:
                 self.context['offset'] += np.array([0,-50])/self.context['scale']
             elif event.key == pygame.K_d:
                 self.context['offset'] += np.array([-50,00])/self.context['scale']
+            # R restarts the simulation
+            elif event.key == pygame.K_r:
+                self.restart = True
         elif event.type == pygame.MOUSEWHEEL:
             # Wheel up zooms in 5%
             if event.y > 0:
@@ -152,27 +155,30 @@ class InteractiveAnimation:
         self.canvas = pygame.Surface((self.width, self.height))
         self.font = pygame.font.SysFont(None, 24)
         self.running = True
+        self.restart = False
         self.iterations = 0
         self.paused = paused
         while self.running:
-            for state in self.states:
-                new_state = True
-                while self.running and (self.paused or new_state):
-                    # Clear the screen
-                    self.canvas.fill(BLACK)
-                    # Handle user inputs
-                    for event in pygame.event.get():
-                        self.handle_user_input(event)
-                    # Draw
-                    self.draw(state)
-                    # Update simulation text
-                    self.update_simulation_text()
-                    # Refresh display
-                    pygame.display.flip()
-                    self.clock.tick(self.fps)
-                    new_state = False
-                self.iterations += 1
+            while not self.restart:
+                for state in self.states:
+                    new_state = True
+                    while self.running and not self.restart and (self.paused or new_state):
+                        # Clear the screen
+                        self.canvas.fill(BLACK)
+                        # Handle user inputs
+                        for event in pygame.event.get():
+                            self.handle_user_input(event)
+                        # Draw
+                        self.draw(state)
+                        # Update simulation text
+                        self.update_simulation_text()
+                        # Refresh display
+                        pygame.display.flip()
+                        self.clock.tick(self.fps)
+                        new_state = False
+                    self.iterations += 1
             self.iterations = 0
+            self.restart = False
         pygame.quit()
         
 

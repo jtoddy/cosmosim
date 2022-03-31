@@ -22,7 +22,7 @@ star = Object(mass=STAR_MASS,
                 color=STAR_COLOR)
 
 # Create some planets in a disk around the star
-NUM_PLANETS = 10000
+NUM_PLANETS = 5000
 PLANET_DENSITY = 300
 D_MIN = 0.1*AU
 D_MAX = 0.5*AU
@@ -40,7 +40,7 @@ for i in range(NUM_PLANETS):
    
 #Simulate
 path = "C:/test_data/cosmosim/test_run1/data/"
-iterations = 10000
+iterations = 50000
 dt = 600
 objects = [star, *planets]
 collisions = True
