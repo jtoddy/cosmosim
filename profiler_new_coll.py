@@ -41,17 +41,10 @@ for i in range(NUM_PLANETS):
    
 #Simulate
 path = "test_data/profiler_run/data/"
-iterations = 20000
+iterations = 100
 dt = 600
 objects = [star, *planets]
 collisions = True
 
-# test_sim = Universe(objects, dt, iterations, path)
-# cProfile.run("test_sim.run(collisions=collisions)", "restats_gen_new")
-
-scale=6.5e-9
-rotation = np.array([3.14/4,3.14/4])
-# animation = MP4Animation(path, "C:/test_data/cosmosim/test_run1/animation/", scale=scale, context ={"rotation":rotation})
-# animation.run()
-animation = InteractiveAnimation(path, scale=scale)
-cProfile.run('animation.play()', "restats_play")
+test_sim = Universe(objects, dt, iterations, path)
+cProfile.run("test_sim.run(collisions=collisions)", "restats_gen_new")

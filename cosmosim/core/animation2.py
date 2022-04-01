@@ -63,6 +63,7 @@ class InteractiveAnimation:
         # Stop simulation when user quits
         if event.type == pygame.QUIT:
             print("Quitting...")
+            self.restart = True
             self.running = False
         # Key presses
         elif event.type == pygame.KEYDOWN:

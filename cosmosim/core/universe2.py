@@ -111,14 +111,16 @@ class State:
         # return forces.sum(axis=1)/self.masses.reshape(-1, 1)
     
     def resolve_collisions(self):
+        n = self.n_objects
         d = pairwise_distances(self.positions, n_jobs=-1, force_all_finite=True)
         radii = self.get_radii()
         collision_matrix = d <= np.add.outer(radii,radii)
+        np.fill_diagonal(collision_matrix,False)
         absorbed = []
-        for i in range(collision_matrix.shape[0]):
+        for i in range(n):
             if i not in absorbed:
                 for j, c in enumerate(collision_matrix[i]):
-                        if c and i != j and j not in absorbed:
+                        if c and j not in absorbed:
                             if self.masses[i] >= self.masses[j]:
                                 self.collide(i,j)
                                 absorbed.append(j)
@@ -130,23 +132,38 @@ class State:
         self.velocities = np.delete(self.velocities, absorbed, axis=0)
         self.densities = np.delete(self.densities, absorbed)
         for i in sorted(absorbed, reverse=True):
-            try:
-                del self.names[i]
-                del self.colors[i]
-            except Exception as e:
-                print(i)
-                print(len(colors))
-                print(self.n_objects)
-                print(collision_matrix.shape)
-                raise(e)
+            del self.names[i]
+            del self.colors[i]
         self.n_objects = len(self.masses)
-            
+        
+    def resolve_collisions2(self):
+        absorbed = []
+        d = pairwise_distances(self.positions, n_jobs=-1, force_all_finite=True)
+        radii = self.get_radii()
+        collision_matrix = (d <= np.add.outer(radii,radii)).astype(int)
+        np.fill_diagonal(collision_matrix,0)
+        m_greater = np.greater_equal.outer(self.masses, self.masses)
+        n = self.n_objects
+        m_totals = np.add.outer(self.masses, self.masses)
+        momenta = self.masses[:, None] * self.velocities
+        moments = self.masses[:, None] * self.positions
+        densities_w = self.masses * self.densities
+        
+        coms = collision_matrix.reshape(n,n,1)*((moments + moments[:, None, :])/m_totals[None,:].T)
+        v_coll = collision_matrix.reshape(n,n,1)*((momenta + momenta[:, None, :])/m_totals[None,:].T)
+        d_coll = collision_matrix*(np.add.outer(densities_w, densities_w)/m_totals)
+        
+        
+        
+        
+        self.resolve_collisions()
+        
     def interact(self, collisions=True, G=_G):
         a = self.get_acc(G)
         self.velocities = np.minimum(self.velocities + a*self.dt, C)
         self.positions = self.positions + self.velocities*self.dt
         if collisions:
-            self.resolve_collisions()
+            self.resolve_collisions2()
         self.iterations += 1
 
     def save(self, f):
@@ -155,7 +172,7 @@ class State:
         
 class Universe:
     
-    def __init__(self, objects, dt, iterations, outpath=None, filesize=1000):
+    def __init__(self, objects, dt, iterations, outpath=None, filesize=None):
         self.objects = objects
         self.dt = dt
         self.iterations = iterations
@@ -165,7 +182,7 @@ class Universe:
                
     def run(self, collisions=True):
         state = State(self.objects, dt=self.dt)
-        nfiles = math.ceil(self.iterations/self.filesize)
+        nfiles = math.ceil(self.iterations/self.filesize) if self.filesize else 1
         elapsed = 0
         if self.outpath:
             if not os.path.isdir(self.outpath):
@@ -176,7 +193,7 @@ class Universe:
             print(f"A total of {nfiles} data files will be created.")
             for n in range(nfiles): 
                 path = self.outpath + f"{n}.dat"
-                for i in tqdm(range(min(self.filesize, self.iterations)), desc=f"Writing file {n}"):
+                for i in tqdm(range(min(self.filesize or np.inf, self.iterations)), desc=f"Writing file {n}"):
                     state.interact(collisions)
                     with open(path, "ab+") as f:
                         state.save(f)

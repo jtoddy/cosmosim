@@ -126,3 +126,6 @@ dmypy.json
 
 # To-do list
 todo.md
+
+#Test data
+test_data/
