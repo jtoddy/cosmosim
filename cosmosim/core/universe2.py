@@ -69,10 +69,10 @@ class State:
             self.densities.append(o.density)
             self.names.append(o.name)
             self.colors.append(o.color)
-        self.masses = np.array(self.masses).astype(float)
-        self.positions = np.array(self.positions).astype(float)
-        self.velocities = np.array(self.velocities).astype(float)
-        self.densities = np.array(self.densities).astype(float)
+        self.masses = np.array(self.masses, dtype="float32")
+        self.positions = np.array(self.positions, dtype="float32")
+        self.velocities = np.array(self.velocities, dtype="float32")
+        self.densities = np.array(self.densities, dtype="float32")
 
     def get_volumes(self):
         return self.masses/self.densities
@@ -137,26 +137,37 @@ class State:
         self.n_objects = len(self.masses)
         
     def resolve_collisions2(self):
-        absorbed = []
-        d = pairwise_distances(self.positions, n_jobs=-1, force_all_finite=True)
         radii = self.get_radii()
+        n = self.n_objects
+        d = pairwise_distances(self.positions, n_jobs=-1, force_all_finite=True)
+
         collision_matrix = (d <= np.add.outer(radii,radii)).astype(int)
         np.fill_diagonal(collision_matrix,0)
-        m_greater = np.greater_equal.outer(self.masses, self.masses)
-        n = self.n_objects
-        m_totals = np.add.outer(self.masses, self.masses)
+        cm = np.max(collision_matrix, axis=1)
+
         momenta = self.masses[:, None] * self.velocities
         moments = self.masses[:, None] * self.positions
         densities_w = self.masses * self.densities
+        m_totals = np.add.outer(self.masses, self.masses)
         
-        coms = collision_matrix.reshape(n,n,1)*((moments + moments[:, None, :])/m_totals[None,:].T)
-        v_coll = collision_matrix.reshape(n,n,1)*((momenta + momenta[:, None, :])/m_totals[None,:].T)
-        d_coll = collision_matrix*(np.add.outer(densities_w, densities_w)/m_totals)
-        
-        
-        
-        
-        self.resolve_collisions()
+        new_positions = (moments + moments[:, None, :])/m_totals[None,:].T
+        new_velocities = (momenta + momenta[:, None, :])/m_totals[None,:].T
+        new_densities = np.add.outer(densities_w, densities_w)/m_totals
+
+        self.positions[cm] = new_positions[collision_matrix]
+        self.velocities[cm] = new_velocities[collision_matrix]
+        self.densities[cm] = new_densities[cm]
+
+        m_less = np.less_equal.outer(self.masses, self.masses)
+        absorbed = np.max(np.tril(m_less*collision_matrix, -1), axis=1).nonzero()[0].tolist()
+        self.masses = np.delete(self.masses, absorbed)
+        self.positions = np.delete(self.positions, absorbed, axis=0)
+        self.velocities = np.delete(self.velocities, absorbed, axis=0)
+        self.densities = np.delete(self.densities, absorbed)
+        for i in sorted(absorbed, reverse=True):
+            del self.names[i]
+            del self.colors[i]
+        self.n_objects = len(self.masses)
         
     def interact(self, collisions=True, G=_G):
         a = self.get_acc(G)
