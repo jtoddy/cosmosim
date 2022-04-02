@@ -1,7 +1,16 @@
 import numpy as np
+import cupy as cp
 import math
 
 # Functions
+def pairwise_distances(positions):
+    xp = cp.get_array_module(positions)
+    n = len(positions)
+    distance = xp.empty((n,n))
+    for i in range(n):
+        distance[i,:] = xp.abs(xp.broadcast_to(positions[i,:], positions.shape) - positions).sum(axis=1)
+    return distance
+        
 def normalize(v):
     norm = np.linalg.norm(v)
     if norm == 0: 
@@ -11,7 +20,7 @@ def normalize(v):
 def to_cartesian(r, theta, origin=[0,0]):
     y = r*np.sin(theta) + origin[0]
     x = r*np.cos(theta) + origin[1]
-    return [y,x]
+    return np.array([y,x])
 
 def to_cartesian_3d(r, theta, phi, origin=[0,0,0]):
     y = r*np.sin(theta)*np.sin(phi) + origin[0]
@@ -35,13 +44,14 @@ def rotation_3d(v, theta, phi):
     return np.matmul(R,v)
 
 def rotation_3d_multi(M, theta, phi):
-    Rtheta = np.array([[np.cos(theta), 0, np.sin(theta)],
+    xp = cp.get_array_module(M)
+    Rtheta = xp.array([[np.cos(theta), 0, np.sin(theta)],
                       [0,1,0],
                       [-np.sin(theta), 0, np.cos(theta)]])
-    Rphi = np.array([[1, 0, 0],
+    Rphi = xp.array([[1, 0, 0],
                      [0, np.cos(phi), -np.sin(phi)],
                      [0, np.sin(phi), np.cos(phi)]])
-    R = np.matmul(Rtheta,Rphi)
+    R = xp.matmul(Rtheta,Rphi)
     return R.dot(M.T).T
 
 def get_tangent(position, reference=[0,0]):
@@ -54,6 +64,18 @@ def get_radius(mass, density):
     volume = mass/density
     radius = ((3*volume)/(4*math.pi))**(1/3)
     return radius
+
+def outer_sum(a, b):
+    return a[:, None] + b[None, :]
+
+def less_equal(a, b):
+    return (a[:, None] <= b[None, :])
+
+def less(a, b):
+    return (a[:, None] < b[None, :])
+
+def equal(a, b):
+    return (a[:, None] == b[None, :])
 
 def screen_coordinates(p, scale, offset, origin):
     return origin + (np.multiply(p,np.array([1,-1]))*scale)+(offset*scale)
@@ -68,7 +90,8 @@ def screen_coordinates_3d(p, scale, offset, rotation, origin):
 def screen_coordinates_3d_multi(P, scale, offset, rotation, origin):
     theta, phi = rotation
     S0 = rotation_3d_multi(P, theta, phi)
-    S1 = np.delete(S0, 2, 1)
-    S2 = np.multiply(S1,np.array([1,-1]).T)*scale
-    S = S2+(origin+offset*scale)
+    xp = cp.get_array_module(S0)
+    S1 = S0[:,[0,1]]
+    S2 = xp.multiply(S1,xp.array([1,-1]).T)*scale
+    S = S2+xp.array(origin+offset*scale)
     return S

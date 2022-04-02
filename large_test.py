@@ -1,8 +1,6 @@
-from cosmosim.core.universe2 import Object, Universe
-from cosmosim.core.animation2 import  MP4Animation, InteractiveAnimation
+from cosmosim.core.universe import Object, Universe
+from cosmosim.core.animation import InteractiveAnimation
 import random
-import numpy as np
-import cProfile
 
 AU = 1.496e11   # Astronomical unit
 ME = 5.972e24   # Mass of the Earth
@@ -23,7 +21,7 @@ star = Object(mass=STAR_MASS,
                 color=STAR_COLOR)
 
 # Create some planets in a disk around the star
-NUM_PLANETS = 3000
+NUM_PLANETS = 2000
 PLANET_DENSITY = 300
 D_MIN = 0.1*AU
 D_MAX = 0.5*AU
@@ -41,10 +39,13 @@ for i in range(NUM_PLANETS):
    
 #Simulate
 path = "test_data/profiler_run/data/"
-iterations = 100
+iterations = 1000
 dt = 600
 objects = [star, *planets]
 collisions = True
+scale=6.5e-9
 
-test_sim = Universe(objects, dt, iterations, path)
-cProfile.run("test_sim.run(collisions=collisions)", "restats_gen_new")
+test_sim = Universe(objects, dt, iterations, path+"cpu/")
+test_sim.run(collisions=collisions, gpu=True)
+animation = InteractiveAnimation(path+"cpu/", scale=scale)
+animation.play()

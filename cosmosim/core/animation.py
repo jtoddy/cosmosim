@@ -1,5 +1,6 @@
 import cosmosim.util.functions as F
 import os
+import sys
 import pickle
 import pygame
 import numpy as np
@@ -7,6 +8,7 @@ import datetime
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation, writers
+import json
 
 WHITE = (255,255,255)
 YELLOW = (255,255,0)
@@ -14,7 +16,7 @@ BLACK = (0,0,0)
           
 class InteractiveAnimation:
     
-    def __init__(self, data, width=1600, height=1000, fps=60, scale=1.3e-6):
+    def __init__(self, data, dt=1, width=1600, height=1000, fps=60, scale=1.3e-6):
         self.width = width
         self.height = height
         self.fps = fps
@@ -34,33 +36,32 @@ class InteractiveAnimation:
             path = data
             self.filelist = os.listdir(path)
             for i in tqdm(self.filelist, desc="Loading data"):
-                with open(path + i, 'rb') as f:
-                    while True:
-                        try:
-                            state = pickle.load(f)
-                            self.states.append(state)
-                        except EOFError:
-                            break
+                with open(path + i, 'r') as f:
+                    self.states = json.load(f)
         else:
             self.states = data
             
         self.frames = len(self.states)
-        self.dt = self.states[0].dt
+        self.dt = dt
+        self.states.sort(key=lambda x: x["iterations"])
                     
     def draw(self, state):
-        objects = state.objects
-        scale = self.context['scale']
-        for obj in objects:
-            radius = max(1, int(obj.get_radius()*scale))
-            q = F.screen_coordinates_3d(obj.position, **self.context)
+        for field in ["masses","densities","positions"]:
+            state[field] = np.array(state[field])
+        radii = [F.get_radius(m,d) for m, d in zip(state["masses"], state["densities"])]
+        Q = F.screen_coordinates_3d_multi(state["positions"], **self.context)
+        for i in range(state["n"]):
+            q = Q[i]
             if self.onscreen(q):
-                pygame.draw.circle(self.screen, obj.color, q.astype(int), radius)
-    
+                radius = max(1, int(radii[i]*self.context['scale']))
+                pygame.draw.circle(self.canvas, state["colors"][i], q.astype(int), radius)
+        self.screen.blit(self.canvas, self.context['offset'])
             
     def handle_user_input(self, event):
         # Stop simulation when user quits
         if event.type == pygame.QUIT:
             print("Quitting...")
+            self.restart = True
             self.running = False
         # Key presses
         elif event.type == pygame.KEYDOWN:
@@ -76,6 +77,9 @@ class InteractiveAnimation:
                 self.context['offset'] += np.array([0,-50])/self.context['scale']
             elif event.key == pygame.K_d:
                 self.context['offset'] += np.array([-50,00])/self.context['scale']
+            # R restarts the simulation
+            elif event.key == pygame.K_r:
+                self.restart = True
         elif event.type == pygame.MOUSEWHEEL:
             # Wheel up zooms in 5%
             if event.y > 0:
@@ -147,35 +151,39 @@ class InteractiveAnimation:
         self.clock = pygame.time.Clock()
         self.screen = pygame.display.set_mode([self.width, self.height])
         self.screen.set_alpha(None)
+        self.canvas = pygame.Surface((self.width, self.height))
         self.font = pygame.font.SysFont(None, 24)
         self.running = True
+        self.restart = False
         self.iterations = 0
         self.paused = paused
         while self.running:
-            for state in self.states:
-                new_state = True
-                while self.running and (self.paused or new_state):
-                    # Clear the screen
-                    self.screen.fill(BLACK)
-                    # Handle user inputs
-                    for event in pygame.event.get():
-                        self.handle_user_input(event)
-                    # Draw
-                    self.draw(state)
-                    # Update simulation text
-                    self.update_simulation_text()
-                    # Refresh display
-                    pygame.display.flip()
-                    self.clock.tick(self.fps)
-                    new_state = False
-                self.iterations += 1
-            self.iterations = 0
+            while not self.restart:
+                for state in self.states:
+                    new_state = True
+                    while self.running and not self.restart and (self.paused or new_state):
+                        # Clear the screen
+                        self.canvas.fill(BLACK)
+                        # Handle user inputs
+                        for event in pygame.event.get():
+                            self.handle_user_input(event)
+                        # Draw
+                        self.draw(state)
+                        # Update simulation text
+                        self.update_simulation_text()
+                        # Refresh display
+                        pygame.display.flip()
+                        self.clock.tick(self.fps)
+                        new_state = False
+                    self.iterations += 1
+                self.iterations = 0
+            self.restart = False
         pygame.quit()
         
 
 class MP4Animation:
     
-    def __init__(self, data, width=1000, height=1000, fps=60, scale=1.3e-6, n_frames=None):
+    def __init__(self, data, outpath, dt=1, width=1000, height=1000, fps=60, scale=1.3e-6, n_frames=None, context={}):
         self.width = width
         self.height = height
         self.fps = fps
@@ -183,11 +191,13 @@ class MP4Animation:
         self.scale = scale        
         self.paused = False
         self.dragging = False
+        self.outpath = outpath
         self.context = {
             "scale":self.scale,
             "offset":np.array([0.0,0.0]),
             "rotation":np.array([0.0, 0.0]),
-            "origin":np.array([self.width/2,self.height/2])
+            "origin":np.array([self.width/2,self.height/2]),
+            **context
         }
         
         if isinstance(data, str):
@@ -208,7 +218,7 @@ class MP4Animation:
             self.states = data
             
         self.frames = n_frames or len(self.states)
-        self.dt = self.states[0].dt
+        self.dt = dt
         px = 1/plt.rcParams['figure.dpi']  # pixel in inches
         figsize=(self.width*px, self.height*px, )
         self.fig = plt.figure(figsize=figsize)
@@ -244,12 +254,14 @@ class MP4Animation:
         
         
     def animate(self, i):
-        print(f"Rendering frame: {i+1}/{self.frames}")
         state = self.states[i]
         scale = self.context['scale']
-        positions = [F.screen_coordinates_3d(p, **self.context) for p in state.positions()]
-        radii = [max(1, int(r*scale)) for r in state.radii()]
-        colors = [(c[0]/255, c[1]/255, c[2]/255) for c in state.colors()]
+        for field in ["masses","densities","positions"]:
+            state[field] = np.array(state[field])
+        radii = [F.get_radius(m,d) for m, d in zip(state["masses"], state["densities"])]
+        positions = [F.screen_coordinates_3d(p, **self.context) for p in state["positions"]]
+        radii = [max(1, int(r*scale)) for r in radii]
+        colors = [(c[0]/255, c[1]/255, c[2]/255) for c in state["colors"]]
         self.space.set_offsets(positions)
         self.space.set_sizes(radii)
         self.space.set_edgecolors(colors)
@@ -260,9 +272,15 @@ class MP4Animation:
     def run(self):
         writer = writers['ffmpeg']
         writer = writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
+        if not os.path.isdir(self.outpath):
+            os.makedirs(self.outpath)
+        existing_filelist = os.listdir(self.outpath)
+        for f in existing_filelist:
+            os.remove(self.outpath + f)
         anim = FuncAnimation(self.fig, 
                              self.animate, 
-                             frames=self.frames,
+                             frames=tqdm(range(self.frames), desc="Rendering MP4", file=sys.stdout),
                              interval=20)
         print("saving")
-        anim.save("C:/test_data/cosmosim/animation.mp4")
+        anim.save(self.outpath+"cosmosim.mp4")
+        print("Done!")

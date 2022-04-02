@@ -1,7 +1,6 @@
-from cosmosim.core.universe2 import Object, Universe
-from cosmosim.core.animation2 import  MP4Animation, InteractiveAnimation
+from cosmosim.core.universe import Object, Universe
+from cosmosim.core.animation import InteractiveAnimation
 import random
-import numpy as np
 import cProfile
 
 AU = 1.496e11   # Astronomical unit
@@ -41,17 +40,18 @@ for i in range(NUM_PLANETS):
    
 #Simulate
 path = "test_data/profiler_run/data/"
-iterations = 20000
+iterations = 100
 dt = 600
 objects = [star, *planets]
 collisions = True
-
-# test_sim = Universe(objects, dt, iterations, path)
-# cProfile.run("test_sim.run(collisions=collisions)", "restats_gen_new")
-
 scale=6.5e-9
-rotation = np.array([3.14/4,3.14/4])
-# animation = MP4Animation(path, "C:/test_data/cosmosim/test_run1/animation/", scale=scale, context ={"rotation":rotation})
-# animation.run()
-animation = InteractiveAnimation(path, scale=scale)
-cProfile.run('animation.play()', "restats_play")
+
+test_sim = Universe(objects, dt, iterations, path+"cpu/")
+cProfile.run("test_sim.run(collisions=collisions, gpu=False)", "restats_gen")
+animation = InteractiveAnimation(path+"cpu/", scale=scale)
+animation.play()
+
+test_sim_gpu = Universe(objects, dt, iterations, path+"gpu/")
+cProfile.run("test_sim_gpu.run(collisions=collisions, gpu=True)", "restats_gen_gpu")
+animation_gpu = InteractiveAnimation(path+"gpu/", scale=scale)
+animation_gpu.play()
