@@ -26,8 +26,8 @@ class Object:
     def __init__(self, mass, density, position, velocity=[0,0,0], 
                  name=None, color=None):
         self.exists = True
-        self.mass = mass/ME
-        self.density = density/ME
+        self.mass = mass
+        self.density = density
         self.position = np.array(position, dtype="float32")
         self.velocity = np.array(velocity, dtype="float32")
         self.name = name or prnc.generate_word()
@@ -45,7 +45,7 @@ class Object:
         mass = mass or random.random()*self.mass
         density = density or self.density
         theta = theta or 2*math.pi*random.random()
-        v_mag = math.sqrt((self.mass*G*ME)/distance) # Circular orbit
+        v_mag = math.sqrt((self.mass*G)/distance) # Circular orbit
         pos = F.to_cartesian(distance, theta)
         pos_norm = pos/np.linalg.norm(pos)
         v = np.append(F.rotation(v_mag*pos_norm,math.pi/2), [0])
@@ -63,6 +63,7 @@ class State:
         self.densities = []
         self.names = []
         self.colors = []
+        self.metadata = {}
         self.iterations = 0
         self.dt = dt
         self.gpu = gpu
@@ -104,8 +105,8 @@ class State:
         return forces.sum(axis=1)/self.masses.reshape(-1, 1)
     
     def collide(self, i, j):
-        m_i = self.masses[i]
-        m_j = self.masses[j]
+        m_i = self.masses[i]/ME
+        m_j = self.masses[j]/ME
         p_i = self.positions[i]
         p_j = self.positions[j]
         v_i = self.velocities[i]
@@ -116,11 +117,15 @@ class State:
         p = ((m_i*p_i)+(m_j*p_j))/m_total
         v = ((m_i*v_i)+(m_j*v_j))/m_total
         d = ((m_i*d_i)+(m_j*d_j))/m_total
-        self.masses[i] = m_total
-        self.masses[j] = 0.0
+        self.masses[i] = m_total*ME
         self.positions[i] = p
         self.velocities[i] = v
         self.densities[i] = d
+        i_name = self.names[i]
+        if not self.metadata.get(i_name):
+            self.metadata[i_name] = {}
+            self.metadata[i_name]["absorbed"] = 0
+        self.metadata[i_name]["absorbed"] += 1
     
     def resolve_collisions(self):
         n = self.n_objects
@@ -194,10 +199,10 @@ class State:
         
     def interact(self, collisions=True, G=_G):
         if self.gpu:
-            a = cp.minimum(self.get_acc_gpu(G*ME), C)
+            a = cp.minimum(self.get_acc_gpu(G), C)
             self.velocities = cp.minimum(self.velocities + a*self.dt, C)
         else:  
-            a = np.minimum(self.get_acc(G*ME), C)
+            a = np.minimum(self.get_acc(G), C)
             self.velocities = np.minimum(self.velocities + a*self.dt, C)
         self.positions = self.positions + self.velocities*self.dt
         if collisions and self.gpu:
@@ -213,6 +218,8 @@ class State:
                 "masses": cp.asarray(self.masses).tolist(),
                 "densities": cp.asarray(self.densities).tolist(),
                 "positions": cp.asarray(self.positions).tolist(),
+                "velocities": cp.asarray(self.velocities).tolist(),
+                "metadata": self.metadata,
                 "iterations": self.iterations}
         
 class Universe:

@@ -13,6 +13,14 @@ import json
 WHITE = (255,255,255)
 YELLOW = (255,255,0)
 BLACK = (0,0,0)
+AU = 1.496e11       # Astronomical unit
+ME = 5.972e24       # Mass of the Earth
+RE = 6.371e6        # Radius of the earth
+MS = 1.989e30       # Mass of the sun
+RS = 6.9634e8       # Radius of the sun
+DAYTIME = 86400     # Seconds in a day
+_G = 6.674e-11      # Gravitational constant
+C = 3e8             # Speed of light
           
 class InteractiveAnimation:
     
@@ -30,6 +38,13 @@ class InteractiveAnimation:
             "rotation":np.array([0.0, 0.0]),
             "origin":np.array([self.width/2,self.height/2])
         }
+        self.current_state = None
+        self.selected_object = None
+        self.selected_object_name = None
+        self.tracked_objects = {}
+        # initialize buttons
+        self.close_btn = None
+        self.track_btn = None
         
         if isinstance(data, str):
             self.states = []
@@ -48,16 +63,43 @@ class InteractiveAnimation:
     def draw(self, state):
         for field in ["masses","densities","positions"]:
             state[field] = np.array(state[field])
-        radii = [F.get_radius(m,d) for m, d in zip(state["masses"], state["densities"])]
-        Q = F.screen_coordinates_3d_multi(state["positions"], **self.context)
+        Q = self.screen_positions
         for i in range(state["n"]):
             q = Q[i]
+            # Trace the object's path if it is tracked
+            name = state["names"][i]
+            if name in self.tracked_objects.keys():
+                history = self.tracked_objects[name]
+                h_length = len(history)
+                color = state["colors"][i]
+                history_sc = F.screen_coordinates_3d_multi(np.array(history), **self.context)
+                for _i in range(h_length):
+                    if i > 0:
+                        q0 = history_sc[_i-1]
+                        q1 = history_sc[_i]
+                        alpha = _i/h_length
+                        trail_color = tuple(alpha*c for c in color)
+                        pygame.draw.line(self.canvas, trail_color, q0.astype(int), q1.astype(int), 1)
             if self.onscreen(q):
-                radius = max(1, int(radii[i]*self.context['scale']))
+                radius = max(1, int(self.radii[i]*self.context['scale']))
+                if self.selected_object == i:
+                    # Highlight the planet if selected
+                    pygame.draw.circle(self.canvas, WHITE, q.astype(int), max(int(radius*2), 4)) 
+                    pygame.draw.circle(self.canvas, BLACK, q.astype(int), max(int(radius*1.85), 2))
                 pygame.draw.circle(self.canvas, state["colors"][i], q.astype(int), radius)
         self.screen.blit(self.canvas, [0.0,0.0])
+
+    def toggle_tracking(self, obj):
+        if obj in self.tracked_objects.keys():
+            del self.tracked_objects[obj]
+        else:
+            i = self.current_state["names"].index(obj)
+            p = self.current_state["positions"][i]
+            self.tracked_objects[obj] = [p]
             
     def handle_user_input(self, event):
+        obj = self.selected_object
+        state = self.current_state
         # Stop simulation when user quits
         if event.type == pygame.QUIT:
             print("Quitting...")
@@ -103,6 +145,21 @@ class InteractiveAnimation:
             # Releasing left click
             if event.button == 1:            
                 self.dragging = False
+                pos = pygame.mouse.get_pos()
+                # Click on close button
+                if self.close_btn and self.close_btn.collidepoint(pos):
+                    self.selected_object = None
+                    self.selected_object_name = None
+                # Click on tracking button
+                elif self.track_btn and self.track_btn.collidepoint(pos):
+                    self.toggle_tracking(state["names"][obj])
+                # Click on planet
+                else:
+                    selected_objs = [i for i, p in enumerate(self.screen_positions) if np.linalg.norm(p - pos) <= max(self.radii[i]*self.context['scale'],10.0)]
+                    if len(selected_objs) > 0:
+                        self.selected_object = selected_objs[0]
+                        self.selected_object_name = state["names"][self.selected_object]
+
         elif event.type == pygame.MOUSEMOTION:
             # Dragging mouse rotates the screen
             if self.dragging:
@@ -146,6 +203,63 @@ class InteractiveAnimation:
             paused_text = "PAUSED"
             paused_img = self.font.render(paused_text, True, WHITE)
             self.screen.blit(paused_img, (self.width*0.48, 20))
+
+    def update_selected_object_text(self):
+        obj = self.selected_object
+        state = self.current_state
+        if obj != None:
+            if state["names"][obj]:
+                name = state["names"][obj]
+                # Info box dimensions
+                INFO_X = 10
+                INFO_Y = 10
+                INFO_WIDTH = 450
+                INFO_HEIGHT = 150
+                BTN_SIZE = 30
+                TXT_PAD = 10
+                INFO_X2 = INFO_X + INFO_WIDTH
+                INFO_Y2 = INFO_Y + INFO_HEIGHT
+                
+                # Box Outline
+                pygame.draw.rect(self.screen, WHITE, ((INFO_X, INFO_Y), (INFO_WIDTH, INFO_HEIGHT)), 2)
+                
+                # Header bar
+                pygame.draw.line(self.screen, WHITE, (INFO_X,INFO_Y+BTN_SIZE), (INFO_X2,INFO_Y+BTN_SIZE), 1)
+                
+                # Close button
+                self.close_btn = pygame.draw.rect(self.screen, WHITE, ((INFO_X2-BTN_SIZE,INFO_Y),(BTN_SIZE,BTN_SIZE)), 2)
+                close_img = self.font.render("X", True, WHITE)
+                self.screen.blit(close_img, (INFO_X2-BTN_SIZE+TXT_PAD,INFO_Y+TXT_PAD))
+                
+                # Track button
+                if self.selected_object_name in self.tracked_objects.keys():                  
+                    self.track_btn = pygame.draw.rect(self.screen, WHITE, ((INFO_X,INFO_Y2),(INFO_WIDTH/4,BTN_SIZE)), 0)
+                    track_img = self.font.render("TRACK", True, BLACK)
+                else:
+                    self.track_btn = pygame.draw.rect(self.screen, WHITE, ((INFO_X,INFO_Y2),(INFO_WIDTH/4,BTN_SIZE)), 2)
+                    track_img = self.font.render("TRACK", True, WHITE)
+                self.screen.blit(track_img, (INFO_X+TXT_PAD, INFO_Y2+TXT_PAD-1))
+                
+                # Planet info text
+                v = state["velocities"][obj]
+                vmag = np.linalg.norm(np.array(v))
+                ptext1 = name.upper()
+                ptext2 = "Mass: {:.2e} Earth masses".format(state["masses"][obj]/ME)
+                ptext3 = "Radius: {:.2e} km".format(self.radii[obj]/1000)
+                ptext4 = "Velocity: [{:.2e}, {:.2e}, {:.2e}] {:.2e} m/s".format(*v, vmag)
+                ptext5 = "Objects eaten: %i" % (state.get("metadata",{}).get(name,{}).get("absorbed") or 0)
+                pimg1 = self.font.render(ptext1, True, WHITE)
+                pimg2 = self.font.render(ptext2, True, WHITE)
+                pimg3 = self.font.render(ptext3, True, WHITE) 
+                pimg4 = self.font.render(ptext4, True, WHITE)
+                pimg5 = self.font.render(ptext5, True, WHITE)
+                self.screen.blit(pimg1, (20, INFO_Y + TXT_PAD))
+                self.screen.blit(pimg2, (20, INFO_Y + 2*TXT_PAD + 20))
+                self.screen.blit(pimg3, (20, INFO_Y + 2*TXT_PAD + 40))
+                self.screen.blit(pimg4, (20, INFO_Y + 2*TXT_PAD + 60))
+                self.screen.blit(pimg5, (20, INFO_Y + 2*TXT_PAD + 80))
+            else:
+                self.selected_object = None
             
     def play(self, paused=False):
         pygame.init()
@@ -163,6 +277,29 @@ class InteractiveAnimation:
             while not self.restart:
                 for state in self.states:
                     new_state = True
+                    self.current_state = state
+                    # Update selected object index
+                    if self.selected_object_name in state["names"]:
+                        self.selected_object = state["names"].index(self.selected_object_name)
+                    else:
+                        self.selected_object = None
+                        self.selected_object_name = None
+                    # Update tracked object index and positions
+                    abs_obj = []
+                    for obj in self.tracked_objects.keys():
+                        if obj in state["names"]:
+                            i = state["names"].index(obj)
+                            p = state["positions"][i]
+                            self.tracked_objects[obj].append(p)
+                            self.tracked_objects[obj] = self.tracked_objects[obj][-1000:]
+                        else:
+                            abs_obj.append(obj)
+                    for obj in abs_obj:
+                        del self.tracked_objects[obj]
+
+                    for field in ["masses","densities","positions"]:
+                        self.current_state[field] = np.array(state[field])
+                    self.radii = [F.get_radius(m,d) for m, d in zip(state["masses"], state["densities"])]
                     while self.running and not self.restart and (self.paused or new_state):
                         # Clear the screen
                         self.screen.fill(BLACK)
@@ -170,18 +307,27 @@ class InteractiveAnimation:
                         # Handle user inputs
                         for event in pygame.event.get():
                             self.handle_user_input(event)
+                        # Update screen positions
+                        self.screen_positions = F.screen_coordinates_3d_multi(state["positions"], **self.context)
                         # Draw
                         self.draw(state)
                         # Update simulation text
                         self.update_simulation_text()
+                        # Update selected object text
+                        self.update_selected_object_text()
                         # Refresh display
                         pygame.display.flip()
                         self.clock.tick(self.fps)
                         new_state = False
                     self.iterations += 1
                 self.iterations = 0
+                self.clear_tracking_histories()
             self.restart = False
         pygame.quit()
+
+    def clear_tracking_histories(self):
+        for obj in self.tracked_objects:
+            self.tracked_objects[obj] = []
         
 
 class MP4Animation:

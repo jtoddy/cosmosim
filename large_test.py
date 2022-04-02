@@ -39,13 +39,13 @@ for i in range(NUM_PLANETS):
    
 #Simulate
 path = "test_data/profiler_run/data/"
-iterations = 30000
+iterations = 1000
 dt = 600
 objects = [star, *planets]
 collisions = True
 scale=6.5e-9
 
-#test_sim = Universe(objects, dt, iterations, path)
-#test_sim.run(collisions=collisions, gpu=False)
+# test_sim = Universe(objects, dt, iterations, path)
+# test_sim.run(collisions=collisions, gpu=False)
 animation = InteractiveAnimation(path, scale=scale)
 animation.play()
