@@ -21,7 +21,7 @@ star = Object(mass=STAR_MASS,
                 color=STAR_COLOR)
 
 # Create some planets in a disk around the star
-NUM_PLANETS = 500
+NUM_PLANETS = 1000
 PLANET_DENSITY = 300
 D_MIN = 0.1*AU
 D_MAX = 0.5*AU
@@ -38,14 +38,14 @@ for i in range(NUM_PLANETS):
     planets.append(p)
    
 #Simulate
-path = "test_data/profiler_run/data/"
-iterations = 1000
+path = "test_data/run1/data/"
+iterations = 5000
 dt = 600
 objects = [star, *planets]
 collisions = True
 scale=6.5e-9
 
-# test_sim = Universe(objects, dt, iterations, path)
-# test_sim.run(collisions=collisions, gpu=False)
+test_sim = Universe(objects, dt, iterations, path)
+test_sim.run(collisions=collisions, gpu=True)
 animation = InteractiveAnimation(path, scale=scale)
 animation.play()

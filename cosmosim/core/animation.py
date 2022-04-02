@@ -66,20 +66,12 @@ class InteractiveAnimation:
         Q = self.screen_positions
         for i in range(state["n"]):
             q = Q[i]
-            # Trace the object's path if it is tracked
             name = state["names"][i]
+            # Trace the object's path if it is tracked
             if name in self.tracked_objects.keys():
                 history = self.tracked_objects[name]
-                h_length = len(history)
                 color = state["colors"][i]
-                history_sc = F.screen_coordinates_3d_multi(np.array(history), **self.context)
-                for _i in range(h_length):
-                    if i > 0:
-                        q0 = history_sc[_i-1]
-                        q1 = history_sc[_i]
-                        alpha = _i/h_length
-                        trail_color = tuple(alpha*c for c in color)
-                        pygame.draw.line(self.canvas, trail_color, q0.astype(int), q1.astype(int), 1)
+                self.draw_history(history, color)
             if self.onscreen(q):
                 radius = max(1, int(self.radii[i]*self.context['scale']))
                 if self.selected_object == i:
@@ -89,6 +81,17 @@ class InteractiveAnimation:
                 pygame.draw.circle(self.canvas, state["colors"][i], q.astype(int), radius)
         self.screen.blit(self.canvas, [0.0,0.0])
 
+    def draw_history(self, history, color):
+        h_length = len(history)
+        history_sc = F.screen_coordinates_3d_multi(np.array(history), **self.context)
+        for _i in range(h_length):
+            if _i > 0:
+                q0 = history_sc[_i-1]
+                q1 = history_sc[_i]
+                alpha = _i/h_length
+                trail_color = tuple(alpha*c for c in color)
+                pygame.draw.line(self.canvas, trail_color, q0.astype(int), q1.astype(int), 1)
+                
     def toggle_tracking(self, obj):
         if obj in self.tracked_objects.keys():
             del self.tracked_objects[obj]
@@ -247,17 +250,14 @@ class InteractiveAnimation:
                 ptext2 = "Mass: {:.2e} Earth masses".format(state["masses"][obj]/ME)
                 ptext3 = "Radius: {:.2e} km".format(self.radii[obj]/1000)
                 ptext4 = "Velocity: [{:.2e}, {:.2e}, {:.2e}] {:.2e} m/s".format(*v, vmag)
-                ptext5 = "Objects eaten: %i" % (state.get("metadata",{}).get(name,{}).get("absorbed") or 0)
                 pimg1 = self.font.render(ptext1, True, WHITE)
                 pimg2 = self.font.render(ptext2, True, WHITE)
                 pimg3 = self.font.render(ptext3, True, WHITE) 
                 pimg4 = self.font.render(ptext4, True, WHITE)
-                pimg5 = self.font.render(ptext5, True, WHITE)
                 self.screen.blit(pimg1, (20, INFO_Y + TXT_PAD))
                 self.screen.blit(pimg2, (20, INFO_Y + 2*TXT_PAD + 20))
                 self.screen.blit(pimg3, (20, INFO_Y + 2*TXT_PAD + 40))
                 self.screen.blit(pimg4, (20, INFO_Y + 2*TXT_PAD + 60))
-                self.screen.blit(pimg5, (20, INFO_Y + 2*TXT_PAD + 80))
             else:
                 self.selected_object = None
             
@@ -304,9 +304,6 @@ class InteractiveAnimation:
                         # Clear the screen
                         self.screen.fill(BLACK)
                         self.canvas.fill(BLACK)
-                        # Handle user inputs
-                        for event in pygame.event.get():
-                            self.handle_user_input(event)
                         # Update screen positions
                         self.screen_positions = F.screen_coordinates_3d_multi(state["positions"], **self.context)
                         # Draw
@@ -315,6 +312,9 @@ class InteractiveAnimation:
                         self.update_simulation_text()
                         # Update selected object text
                         self.update_selected_object_text()
+                        # Handle user inputs
+                        for event in pygame.event.get():
+                            self.handle_user_input(event)
                         # Refresh display
                         pygame.display.flip()
                         self.clock.tick(self.fps)

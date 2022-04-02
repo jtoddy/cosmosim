@@ -96,13 +96,14 @@ class State:
         return acc_blas(self.positions, self.masses, G)  # Magic!!!
     
     def get_acc_gpu(self, G):
-        masses = self.masses
+        masses = self.masses/ME
         mass_matrix = masses.reshape((1, -1, 1))*masses.reshape((-1, 1, 1))
         disps = self.positions.reshape((1, -1, 3)) - self.positions.reshape((-1, 1, 3))
         dists = cp.linalg.norm(disps, axis=2)
         dists[dists == 0] = 1
-        forces = G*disps*mass_matrix/cp.expand_dims(dists, 2)**3
-        return forces.sum(axis=1)/self.masses.reshape(-1, 1)
+        forces = (ME*G*disps*mass_matrix)/cp.expand_dims(dists, 2)**3
+        a = (forces.sum(axis=1)/masses.reshape(-1, 1))
+        return a
     
     def collide(self, i, j):
         m_i = self.masses[i]/ME
@@ -121,11 +122,6 @@ class State:
         self.positions[i] = p
         self.velocities[i] = v
         self.densities[i] = d
-        i_name = self.names[i]
-        if not self.metadata.get(i_name):
-            self.metadata[i_name] = {}
-            self.metadata[i_name]["absorbed"] = 0
-        self.metadata[i_name]["absorbed"] += 1
     
     def resolve_collisions(self):
         n = self.n_objects
@@ -156,15 +152,16 @@ class State:
     def resolve_collisions_gpu(self):
         radii = self.get_radii()
         d = F.pairwise_distances(self.positions)
+        masses = self.masses/ME
 
         collision_matrix = (d <= F.outer_sum(radii,radii))
         cp.fill_diagonal(collision_matrix, False)
         cm = cp.max(collision_matrix, axis=1)
 
-        momenta = self.masses[:, None] * self.velocities
-        moments = self.masses[:, None] * self.positions
-        densities_w = self.masses * self.densities
-        m_totals = F.outer_sum(self.masses, self.masses)
+        momenta = masses[:, None] * self.velocities
+        moments = masses[:, None] * self.positions
+        densities_w = masses * self.densities
+        m_totals = F.outer_sum(masses, masses)
         
         new_positions = (moments + moments[:, None, :])/m_totals[None,:].T
         new_positions[~collision_matrix] = 0
@@ -177,15 +174,18 @@ class State:
         new_densities = F.outer_sum(densities_w, densities_w)/m_totals
         new_densities[~collision_matrix] = None
         new_densities = cp.nanmean(new_densities, axis=1)
+        
+        m_less = F.less(self.masses, self.masses)
+        m_equal = cp.tril(F.equal(self.masses, self.masses),-1)
+        abs_matrix = (m_less+m_equal)*collision_matrix
+        absorbed = cp.max(abs_matrix, axis=1)
 
-        self.masses = self.masses + cp.sum(collision_matrix*self.masses, axis=1)
+        self.masses = (masses + cp.sum(collision_matrix*masses, axis=1))*ME
         self.densities[cm] = new_densities[cm]
         self.positions[cm] = new_positions[cm]
         self.velocities[cm] = new_velocities[cm]
         
-        m_less = F.less(self.masses, self.masses)
-        m_equal = cp.tril(F.equal(self.masses, self.masses),-1)
-        absorbed = cp.max((m_less+m_equal)*collision_matrix, axis=1)
+        
         
         self.masses = self.masses[~absorbed]
         self.densities = self.densities[~absorbed]
@@ -219,7 +219,6 @@ class State:
                 "densities": cp.asarray(self.densities).tolist(),
                 "positions": cp.asarray(self.positions).tolist(),
                 "velocities": cp.asarray(self.velocities).tolist(),
-                "metadata": self.metadata,
                 "iterations": self.iterations}
         
 class Universe:
@@ -231,7 +230,28 @@ class Universe:
         self.outpath = outpath
         self.filesize = filesize
         
-    def run(self, collisions=True, gpu=False):
+    def validate_state(self, state):
+        invalid_matrices = {}
+        valid = True
+        n = state["n"]
+        for _m in ["positions","velocities","masses","densities"]:
+            m = state[_m]
+            problems = []
+            m_valid = True
+            if np.isnan(np.sum(m)):
+                m_valid = False
+                problems.append("NaN values detected")
+            if len(m) != n:
+                m_valid = False
+                p = "too big" if len(m) > n else "too small"
+                problems.append(f"Matrix size is {p}")
+            if not m_valid:
+                valid = False
+                invalid_matrices[_m] = problems
+                
+        return valid, invalid_matrices
+        
+    def run(self, collisions=True, gpu=False, validate=True):
         if gpu:
             mempool = cp.get_default_memory_pool()
             mempool.free_all_blocks()
@@ -248,12 +268,18 @@ class Universe:
             for n in range(nfiles): 
                 path = self.outpath + f"data_{n}.json"
                 states = []
-                for i in tqdm(range(min(self.filesize or np.inf, self.iterations)), desc=f"Preparing file {n}"):
+                for i in tqdm(range(min(self.filesize or np.inf, self.iterations)), desc=f"Preparing file {n+1}/{nfiles}"):
                     state.interact(collisions)
-                    states.append(state.state_json())
+                    state_json = state.state_json()
+                    if validate:
+                        valid, invalid_matrices = self.validate_state(state_json)
+                        if not valid:
+                            print("Invalid matrices: "+str(invalid_matrices))
+                            raise(Exception("Data is invalid"))
+                    states.append(state_json)
                     elapsed += 1
                     if elapsed >= self.iterations:
-                        break
+                        break                    
                 print(f"Writing file {n}...")
                 with open(path, "w") as f:
                     json.dump(states,f)
