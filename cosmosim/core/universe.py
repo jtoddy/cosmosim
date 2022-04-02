@@ -1,5 +1,8 @@
 import numpy as np
-import cupy as cp
+try:
+    import cupy as cp
+except:
+    import numpy as cp
 import random
 import math
 import os

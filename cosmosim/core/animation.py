@@ -55,7 +55,7 @@ class InteractiveAnimation:
             if self.onscreen(q):
                 radius = max(1, int(radii[i]*self.context['scale']))
                 pygame.draw.circle(self.canvas, state["colors"][i], q.astype(int), radius)
-        self.screen.blit(self.canvas, self.context['offset'])
+        self.screen.blit(self.canvas, [0.0,0.0])
             
     def handle_user_input(self, event):
         # Stop simulation when user quits
@@ -70,16 +70,18 @@ class InteractiveAnimation:
                 self.paused = not self.paused
             # WASD moves the screen
             elif event.key == pygame.K_w:
-                self.context['offset'] += np.array([0,50])/self.context['scale']
+                self.context['offset'] += np.array([0.0,50.0])/self.context['scale']
             elif event.key == pygame.K_a:
-                self.context['offset'] += np.array([50,0])/self.context['scale']
+                self.context['offset'] += np.array([50.0,0.0])/self.context['scale']
             elif event.key == pygame.K_s:
-                self.context['offset'] += np.array([0,-50])/self.context['scale']
+                self.context['offset'] += np.array([0.0,-50.0])/self.context['scale']
             elif event.key == pygame.K_d:
-                self.context['offset'] += np.array([-50,00])/self.context['scale']
+                self.context['offset'] += np.array([-50.0,0.0])/self.context['scale']
             # R restarts the simulation
             elif event.key == pygame.K_r:
                 self.restart = True
+            else:
+                pass
         elif event.type == pygame.MOUSEWHEEL:
             # Wheel up zooms in 5%
             if event.y > 0:
@@ -163,6 +165,7 @@ class InteractiveAnimation:
                     new_state = True
                     while self.running and not self.restart and (self.paused or new_state):
                         # Clear the screen
+                        self.screen.fill(BLACK)
                         self.canvas.fill(BLACK)
                         # Handle user inputs
                         for event in pygame.event.get():
