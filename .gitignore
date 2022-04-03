@@ -125,7 +125,7 @@ dmypy.json
 .pyre/
 
 # To-do list
-todo.md
+#todo.md
 
 #Test data
 test_data/

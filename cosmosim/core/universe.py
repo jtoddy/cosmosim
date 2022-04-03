@@ -12,6 +12,7 @@ from cosmosim.util.blas import acc_blas
 import cosmosim.util.pronounceable.main as prnc
 from sklearn.metrics import pairwise_distances
 import json
+import warnings
 
 AU = 1.496e11       # Astronomical unit
 ME = 5.972e24       # Mass of the Earth
@@ -151,12 +152,24 @@ class State:
            
     def resolve_collisions_gpu(self):
         radii = self.get_radii()
-        d = F.pairwise_distances(self.positions)
+        #d = F.pairwise_distances(self.positions)
+        d = pairwise_distances(self.positions, n_jobs=-1, force_all_finite=True)
         masses = self.masses/ME
 
         collision_matrix = (d <= F.outer_sum(radii,radii))
         cp.fill_diagonal(collision_matrix, False)
-        cm = cp.max(collision_matrix, axis=1)
+
+        m_less = F.less(self.masses, self.masses)
+        m_equal = cp.tril(F.equal(self.masses, self.masses),-1)
+        # Absorbtion matrix
+        absorbed_matrix = (m_less+m_equal)*collision_matrix
+        # Each object can only be absorbed once; choose the first absorber
+        absorbed_matrix_mod = absorbed_matrix.cumsum(axis=1).cumsum(axis=1) == 1
+        # All objects absorbing
+        absorbing = cp.max(absorbed_matrix_mod, axis=0)
+        # Can only be absorbed if you are not also absorbing
+        absorbed_matrix_final = (absorbed_matrix_mod.T*(~absorbing)).T
+        absorbed = cp.max(absorbed_matrix_final, axis=1)
 
         momenta = masses[:, None] * self.velocities
         moments = masses[:, None] * self.positions
@@ -164,28 +177,23 @@ class State:
         m_totals = F.outer_sum(masses, masses)
         
         new_positions = (moments + moments[:, None, :])/m_totals[None,:].T
-        new_positions[~collision_matrix] = 0
-        new_positions = cp.sum(new_positions, axis=1)
+        new_positions[~absorbing] = 0
+        new_positions = cp.sum(new_positions, axis=0)
         
         new_velocities = (momenta + momenta[:, None, :])/m_totals[None,:].T
-        new_velocities[~collision_matrix] = 0
-        new_velocities = cp.sum(new_velocities, axis=1)
+        new_velocities[~absorbing] = 0
+        new_velocities = cp.sum(new_velocities, axis=0)
         
         new_densities = F.outer_sum(densities_w, densities_w)/m_totals
-        new_densities[~collision_matrix] = None
-        new_densities = cp.nanmean(new_densities, axis=1)
+        new_densities[~absorbing] = None
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=RuntimeWarning)
+            new_densities = cp.nanmean(new_densities, axis=0)
         
-        m_less = F.less(self.masses, self.masses)
-        m_equal = cp.tril(F.equal(self.masses, self.masses),-1)
-        abs_matrix = (m_less+m_equal)*collision_matrix
-        absorbed = cp.max(abs_matrix, axis=1)
-
-        self.masses = (masses + cp.sum(collision_matrix*masses, axis=1))*ME
-        self.densities[cm] = new_densities[cm]
-        self.positions[cm] = new_positions[cm]
-        self.velocities[cm] = new_velocities[cm]
-        
-        
+        self.masses = ME*(masses + (cp.sum(masses*absorbed_matrix_final.T, axis=1)))*(~absorbed)
+        self.densities[absorbing] = new_densities[absorbing]
+        self.positions[absorbing] = new_positions[absorbing]
+        self.velocities[absorbing] = new_velocities[absorbing]
         
         self.masses = self.masses[~absorbed]
         self.densities = self.densities[~absorbed]
@@ -199,7 +207,8 @@ class State:
         
     def interact(self, collisions=True, G=_G):
         if self.gpu:
-            a = cp.minimum(self.get_acc_gpu(G), C)
+            #a = cp.minimum(self.get_acc_gpu(G), C)
+            a = cp.minimum(self.get_acc(G), C)
             self.velocities = cp.minimum(self.velocities + a*self.dt, C)
         else:  
             a = np.minimum(self.get_acc(G), C)
@@ -241,6 +250,9 @@ class Universe:
             if np.isnan(np.sum(m)):
                 m_valid = False
                 problems.append("NaN values detected")
+            if np.sum(m) == 0:
+                m_valid = False
+                problems.append("All entries are 0")
             if len(m) != n:
                 m_valid = False
                 p = "too big" if len(m) > n else "too small"
@@ -253,8 +265,9 @@ class Universe:
         
     def run(self, collisions=True, gpu=False, validate=True):
         if gpu:
-            mempool = cp.get_default_memory_pool()
-            mempool.free_all_blocks()
+            pass
+            # mempool = cp.get_default_memory_pool()
+            # mempool.free_all_blocks()
         state = State(self.objects, dt=self.dt, gpu=gpu)
         nfiles = math.ceil(self.iterations/self.filesize) if self.filesize else 1
         elapsed = 0

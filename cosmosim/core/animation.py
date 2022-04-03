@@ -154,7 +154,7 @@ class InteractiveAnimation:
                     self.selected_object = None
                     self.selected_object_name = None
                 # Click on tracking button
-                elif self.track_btn and self.track_btn.collidepoint(pos):
+                elif self.track_btn and self.track_btn.collidepoint(pos) and obj:
                     self.toggle_tracking(state["names"][obj])
                 # Click on planet
                 else:
