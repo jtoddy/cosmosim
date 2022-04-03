@@ -3,7 +3,7 @@
 	* Pause/Play
 	* FFW/RWD
 	* Speed controls
-* Animation should get `dt` from State object
+* Object IDs
 * Collision animation
 * Add/remove Object methods for State class
 * Advanced satellite creation

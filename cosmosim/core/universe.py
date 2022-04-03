@@ -57,18 +57,21 @@ class Object:
 
 class State:
     def __init__(self, objects, dt=1, gpu=False):
+        if gpu:
+            self.xp = cp
+        else:
+            self.xp = np
         self.n_objects = len(objects)
-        self.masses = []
-        self.positions = []
-        self.velocities = []
-        self.densities = []
-        self.names = []
-        self.colors = []
         self.metadata = {}
         self.iterations = 0
         self.dt = dt
         self.gpu = gpu
-        self.scale = ME
+        self.names = []
+        self.colors = []
+        self.masses = []
+        self.positions = []
+        self.velocities = []
+        self.densities = []
         for o in objects:
             self.masses.append(o.mass)
             self.positions.append(o.position)
@@ -76,16 +79,10 @@ class State:
             self.densities.append(o.density)
             self.names.append(o.name)
             self.colors.append(o.color)
-        if gpu:
-            self.masses = cp.array(self.masses, dtype="float32")
-            self.positions = cp.array(self.positions, dtype="float32")
-            self.velocities = cp.array(self.velocities, dtype="float32")
-            self.densities = cp.array(self.densities, dtype="float32")
-        else:
-            self.masses = np.array(self.masses, dtype="float32")
-            self.positions = np.array(self.positions, dtype="float32")
-            self.velocities = np.array(self.velocities, dtype="float32")
-            self.densities = np.array(self.densities, dtype="float32")
+        self.masses = self.xp.array(self.masses, dtype="float32")
+        self.positions = self.xp.array(self.positions, dtype="float32")
+        self.velocities = self.xp.array(self.velocities, dtype="float32")
+        self.densities = self.xp.array(self.densities, dtype="float32")
 
     def get_volumes(self):
         return self.masses/self.densities
@@ -95,6 +92,37 @@ class State:
         
     def get_acc(self, G):
         return acc_blas(self.positions, self.masses, G)  # Magic!!!
+
+    def add_objects(self, objects):
+        masses = []
+        positions = []
+        velocities = []
+        densities = []
+        for o in objects:
+            self.names.append(o.name)
+            self.colors.append(o.color)
+            masses.append(o.mass)
+            positions.append(o.position)
+            velocities.append(o.velocity)
+            densities.append(o.density)
+        self.masses = self.xp.append(self.masses, masses)
+        self.positions = self.xp.append(self.positions, positions, axis=0)
+        self.velocities = self.xp.append(self.velocities, velocities, axis=0)
+        self.densities = self.xp.append(self.densities, densities)
+        self.n_objects = len(self.masses)
+
+    def remove_objects(self, objects):
+        remove = [self.names.index(o) for o in objects]
+        keep = self.masses.astype(bool)
+        keep[remove] = False
+        self.densities = self.densities[keep]
+        self.positions = self.positions[keep]
+        self.velocities = self.velocities[keep]
+        for i in sorted(absorbed.nonzero()[0].tolist(), reverse=True):
+            del self.names[i]
+            del self.colors[i]
+        self.n_objects = len(self.masses)
+
     
     def get_acc_gpu(self, G):
         masses = self.masses/ME
@@ -152,8 +180,7 @@ class State:
            
     def resolve_collisions_gpu(self):
         radii = self.get_radii()
-        #d = F.pairwise_distances(self.positions)
-        d = pairwise_distances(self.positions, n_jobs=-1, force_all_finite=True)
+        d = F.pairwise_distances(self.positions)
         masses = self.masses/ME
 
         collision_matrix = (d <= F.outer_sum(radii,radii))
@@ -207,8 +234,7 @@ class State:
         
     def interact(self, collisions=True, G=_G):
         if self.gpu:
-            #a = cp.minimum(self.get_acc_gpu(G), C)
-            a = cp.minimum(self.get_acc(G), C)
+            a = cp.minimum(self.get_acc_gpu(G), C)
             self.velocities = cp.minimum(self.velocities + a*self.dt, C)
         else:  
             a = np.minimum(self.get_acc(G), C)
@@ -222,6 +248,7 @@ class State:
         
     def state_json(self):
         return {"n": self.n_objects,
+                "dt": self.dt,
                 "names": self.names.copy(),
                 "colors": self.colors.copy(),
                 "masses": cp.asarray(self.masses).tolist(),
@@ -232,12 +259,13 @@ class State:
         
 class Universe:
     
-    def __init__(self, objects, dt, iterations, outpath=None, filesize=None):
+    def __init__(self, objects, iterations, dt=1, G=_G, outpath=None, filesize=None):
         self.objects = objects
         self.dt = dt
         self.iterations = iterations
         self.outpath = outpath
         self.filesize = filesize
+        self.G = G
         
     def validate_state(self, state):
         invalid_matrices = {}
@@ -265,9 +293,8 @@ class Universe:
         
     def run(self, collisions=True, gpu=False, validate=True):
         if gpu:
-            pass
-            # mempool = cp.get_default_memory_pool()
-            # mempool.free_all_blocks()
+            mempool = cp.get_default_memory_pool()
+            mempool.free_all_blocks()
         state = State(self.objects, dt=self.dt, gpu=gpu)
         nfiles = math.ceil(self.iterations/self.filesize) if self.filesize else 1
         elapsed = 0
@@ -282,7 +309,7 @@ class Universe:
                 path = self.outpath + f"data_{n}.json"
                 states = []
                 for i in tqdm(range(min(self.filesize or np.inf, self.iterations)), desc=f"Preparing file {n+1}/{nfiles}"):
-                    state.interact(collisions)
+                    state.interact(collisions, G=self.G)
                     state_json = state.state_json()
                     if validate:
                         valid, invalid_matrices = self.validate_state(state_json)

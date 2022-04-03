@@ -45,7 +45,7 @@ objects = [star, *planets]
 collisions = True
 scale=6.5e-9
 
-# test_sim = Universe(objects, dt, iterations, path)
-# test_sim.run(collisions=collisions, gpu=False)
+test_sim = Universe(objects, iterations, dt=dt, outpath=path)
+test_sim.run(collisions=collisions, gpu=False)
 animation = InteractiveAnimation(path, scale=scale)
 animation.play()

@@ -24,7 +24,7 @@ C = 3e8             # Speed of light
           
 class InteractiveAnimation:
     
-    def __init__(self, data, dt=1, width=1600, height=1000, fps=60, scale=1.3e-6):
+    def __init__(self, data, width=1600, height=1000, fps=60, scale=1.3e-6):
         self.width = width
         self.height = height
         self.fps = fps
@@ -57,7 +57,6 @@ class InteractiveAnimation:
             self.states = data
             
         self.frames = len(self.states)
-        self.dt = dt
         self.states.sort(key=lambda x: x["iterations"])
                     
     def draw(self, state):
@@ -196,7 +195,7 @@ class InteractiveAnimation:
         iterations_img = self.font.render(iterations_text, True, WHITE)
         self.screen.blit(iterations_img, (self.width*0.85, 60))
         # Update elapsed time
-        elapsed_time = iterations*self.dt
+        elapsed_time = iterations*self.current_state.get("dt",1)
         elapsed_time_formatted = str(datetime.timedelta(seconds=elapsed_time))
         elapsed_time_text = f"Elapsed time: {elapsed_time_formatted}"
         elapsed_time_img = self.font.render(elapsed_time_text, True, WHITE)
@@ -332,7 +331,7 @@ class InteractiveAnimation:
 
 class MP4Animation:
     
-    def __init__(self, data, outpath, dt=1, width=1000, height=1000, fps=60, scale=1.3e-6, n_frames=None, context={}):
+    def __init__(self, data, outpath, width=1000, height=1000, fps=60, scale=1.3e-6, n_frames=None, context={}):
         self.width = width
         self.height = height
         self.fps = fps
@@ -367,7 +366,6 @@ class MP4Animation:
             self.states = data
             
         self.frames = n_frames or len(self.states)
-        self.dt = dt
         px = 1/plt.rcParams['figure.dpi']  # pixel in inches
         figsize=(self.width*px, self.height*px, )
         self.fig = plt.figure(figsize=figsize)
@@ -391,7 +389,7 @@ class MP4Animation:
         frames = self.frames
         iterations_text = f"Frame: {iterations}/{frames}"
         # Update elapsed time
-        elapsed_time = iterations*self.dt
+        elapsed_time = iterations*self.current_state.get("dt",1)
         elapsed_time_formatted = str(datetime.timedelta(seconds=elapsed_time))
         elapsed_time_text = f"Elapsed time: {elapsed_time_formatted}"
         
@@ -407,6 +405,7 @@ class MP4Animation:
         scale = self.context['scale']
         for field in ["masses","densities","positions"]:
             state[field] = np.array(state[field])
+        self.current_state = state
         radii = [F.get_radius(m,d) for m, d in zip(state["masses"], state["densities"])]
         positions = [F.screen_coordinates_3d(p, **self.context) for p in state["positions"]]
         radii = [max(1, int(r*scale)) for r in radii]
