@@ -46,12 +46,22 @@ objects = [star, *planets]
 collisions = True
 scale=6.5e-9
 
-test_sim = Universe(objects, dt, iterations, path+"cpu/")
+test_sim = Universe(objects, iterations, dt=dt, outpath=path+"cpu/")
 cProfile.run("test_sim.run(collisions=collisions, gpu=False)", "restats_gen")
 animation = InteractiveAnimation(path+"cpu/", scale=scale)
 animation.play()
 
-test_sim_gpu = Universe(objects, dt, iterations, path+"gpu/")
+test_sim_gpu = Universe(objects, iterations, dt=dt, outpath=path+"gpu/")
 cProfile.run("test_sim_gpu.run(collisions=collisions, gpu=True)", "restats_gen_gpu")
 animation_gpu = InteractiveAnimation(path+"gpu/", scale=scale)
 animation_gpu.play()
+
+import pstats
+from pstats import SortKey
+
+p_gen = pstats.Stats('restats_gen').strip_dirs()
+p_gen_gpu = pstats.Stats('restats_gen_gpu').strip_dirs()
+
+p_gen.sort_stats(SortKey.CUMULATIVE).print_stats(25)
+print("-"*100)
+p_gen_gpu.sort_stats(SortKey.CUMULATIVE).print_stats(25)

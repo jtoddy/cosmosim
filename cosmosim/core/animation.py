@@ -5,22 +5,13 @@ import pickle
 import pygame
 import numpy as np
 import datetime
+from cosmosim.util.constants import WHITE, BLACK, ME
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation, writers
 import json
 
-WHITE = (255,255,255)
-YELLOW = (255,255,0)
-BLACK = (0,0,0)
-AU = 1.496e11       # Astronomical unit
-ME = 5.972e24       # Mass of the Earth
-RE = 6.371e6        # Radius of the earth
-MS = 1.989e30       # Mass of the sun
-RS = 6.9634e8       # Radius of the sun
-DAYTIME = 86400     # Seconds in a day
-_G = 6.674e-11      # Gravitational constant
-C = 3e8             # Speed of light
+
           
 class InteractiveAnimation:
     
@@ -32,19 +23,22 @@ class InteractiveAnimation:
         self.scale = scale        
         self.paused = False
         self.dragging = False
+        self.origin_offset = np.array([self.width/2,self.height/2])
         self.context = {
             "scale":self.scale,
             "offset":np.array([0.0,0.0]),
             "rotation":np.array([0.0, 0.0]),
-            "origin":np.array([self.width/2,self.height/2])
+            "origin": self.origin_offset
         }
         self.current_state = None
         self.selected_object = None
+        self.locked_object = None
         self.selected_object_name = None
         self.tracked_objects = {}
         # initialize buttons
         self.close_btn = None
         self.track_btn = None
+        self.lock_btn = None
         
         if isinstance(data, str):
             self.states = []
@@ -99,6 +93,12 @@ class InteractiveAnimation:
             p = self.current_state["positions"][i]
             self.tracked_objects[obj] = [p]
             
+    def toggle_locking(self, obj):
+        if self.locked_object == obj:
+            self.locked_object = None
+        else:
+            self.locked_object = obj
+            
     def handle_user_input(self, event):
         obj = self.selected_object
         state = self.current_state
@@ -143,6 +143,8 @@ class InteractiveAnimation:
                 self.context['offset']  = np.array([0.0,0.0])
                 self.context['scale']  = self.default_scale
                 self.context['rotation'] = np.array([0.0,0.0])
+                self.context['origin'] = self.origin_offset
+                self.locked_object = None
         elif event.type == pygame.MOUSEBUTTONUP:
             # Releasing left click
             if event.button == 1:            
@@ -155,6 +157,9 @@ class InteractiveAnimation:
                 # Click on tracking button
                 elif self.track_btn and self.track_btn.collidepoint(pos) and obj:
                     self.toggle_tracking(state["names"][obj])
+                # CLick on lock button
+                elif self.lock_btn and self.lock_btn.collidepoint(pos) and obj:
+                    self.toggle_locking(state["names"][obj])
                 # Click on planet
                 else:
                     selected_objs = [i for i, p in enumerate(self.screen_positions) if np.linalg.norm(p - pos) <= max(self.radii[i]*self.context['scale'],10.0)]
@@ -242,6 +247,15 @@ class InteractiveAnimation:
                     track_img = self.font.render("TRACK", True, WHITE)
                 self.screen.blit(track_img, (INFO_X+TXT_PAD, INFO_Y2+TXT_PAD-1))
                 
+                # Lock button
+                if self.selected_object_name == self.locked_object:                  
+                    self.lock_btn = pygame.draw.rect(self.screen, WHITE, ((INFO_X+(INFO_WIDTH/4),INFO_Y2),(INFO_WIDTH/4,BTN_SIZE)), 0)
+                    lock_img = self.font.render("LOCK", True, BLACK)
+                else:
+                    self.lock_btn = pygame.draw.rect(self.screen, WHITE, ((INFO_X+(INFO_WIDTH/4),INFO_Y2),(INFO_WIDTH/4,BTN_SIZE)), 2)
+                    lock_img = self.font.render("LOCK", True, WHITE)
+                self.screen.blit(lock_img, (INFO_X+TXT_PAD+(INFO_WIDTH/4), INFO_Y2+TXT_PAD-1))
+                
                 # Planet info text
                 v = state["velocities"][obj]
                 vmag = np.linalg.norm(np.array(v))
@@ -283,6 +297,9 @@ class InteractiveAnimation:
                     else:
                         self.selected_object = None
                         self.selected_object_name = None
+                    # Update locked object
+                    if self.locked_object not in state["names"]:
+                        self.locked_object = None
                     # Update tracked object index and positions
                     abs_obj = []
                     for obj in self.tracked_objects.keys():
@@ -300,6 +317,15 @@ class InteractiveAnimation:
                         self.current_state[field] = np.array(state[field])
                     self.radii = [F.get_radius(m,d) for m, d in zip(state["masses"], state["densities"])]
                     while self.running and not self.restart and (self.paused or new_state):
+                    
+                        
+                        # Determine offset
+                        if self.locked_object:
+                            obj_position = state["positions"][state["names"].index(self.locked_object)]
+                            self.context["offset"] = np.array([0.0,0.0])
+                            new_offset = (self.context["origin"] - F.screen_coordinates_3d(obj_position, **self.context))
+                            self.context["offset"] = new_offset/self.context["scale"]
+                            
                         # Clear the screen
                         self.screen.fill(BLACK)
                         self.canvas.fill(BLACK)

@@ -10,13 +10,7 @@ from pstats import SortKey
 
 p_gen = pstats.Stats('restats_gen').strip_dirs()
 p_gen_gpu = pstats.Stats('restats_gen_gpu').strip_dirs()
-p_play = pstats.Stats('restats_play').strip_dirs()
-p_play_gpu = pstats.Stats('restats_play_gpu').strip_dirs()
 
 p_gen.sort_stats(SortKey.CUMULATIVE).print_stats(25)
 print("-"*100)
 p_gen_gpu.sort_stats(SortKey.CUMULATIVE).print_stats(25)
-print("-"*100)
-p_play.sort_stats(SortKey.CUMULATIVE).print_stats(25)
-print("-"*100)
-p_play_gpu.sort_stats(SortKey.CUMULATIVE).print_stats(25)

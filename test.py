@@ -1,11 +1,8 @@
 from cosmosim.core.universe import Object, Universe
 from cosmosim.core.animation import InteractiveAnimation
+from cosmosim.util.constants import AU, ME, MS, DS
 import random
 
-AU = 1.496e11   # Astronomical unit
-ME = 5.972e24   # Mass of the Earth
-MS = 1.989e30   # Mass of the sun
-DS = 1408       # Density of the sun
 
 # Create a star
 STAR_MASS = MS
@@ -21,8 +18,8 @@ star = Object(mass=STAR_MASS,
                 color=STAR_COLOR)
 
 # Create some planets in a disk around the star
-NUM_PLANETS = 500
-PLANET_DENSITY = 300
+NUM_PLANETS = 5000
+PLANET_DENSITY = 5515
 D_MIN = 0.1*AU
 D_MAX = 0.5*AU
 MIN_MASS = 0.1*ME
@@ -38,14 +35,14 @@ for i in range(NUM_PLANETS):
     planets.append(p)
    
 #Simulate
-path = "test_data/run1/data/"
-iterations = 1000
+path = "test_data/run2/data/"
+iterations = 30000
 dt = 600
 objects = [star, *planets]
 collisions = True
 scale=6.5e-9
 
 test_sim = Universe(objects, iterations, dt=dt, outpath=path)
-test_sim.run(collisions=collisions, gpu=False)
+test_sim.run(collisions=collisions, gpu=True)
 animation = InteractiveAnimation(path, scale=scale)
 animation.play()

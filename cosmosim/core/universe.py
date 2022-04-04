@@ -9,19 +9,10 @@ import os
 from tqdm import tqdm
 import cosmosim.util.functions as F
 from cosmosim.util.blas import acc_blas
+from cosmosim.util.constants import ME, G as _G, C
 import cosmosim.util.pronounceable.main as prnc
 from sklearn.metrics import pairwise_distances
 import json
-import warnings
-
-AU = 1.496e11       # Astronomical unit
-ME = 5.972e24       # Mass of the Earth
-RE = 6.371e6        # Radius of the earth
-MS = 1.989e30       # Mass of the sun
-RS = 6.9634e8       # Radius of the sun
-DAYTIME = 86400     # Seconds in a day
-_G = 6.674e-11      # Gravitational constant
-C = 3e8             # Speed of light
 
 class Object:
     def __init__(self, mass, density, position, velocity=[0,0,0], 
@@ -31,7 +22,7 @@ class Object:
         self.density = density
         self.position = np.array(position, dtype="float32")
         self.velocity = np.array(velocity, dtype="float32")
-        self.name = name or prnc.generate_word()
+        self.name = name or (prnc.generate_word() + f"-{random.randint(1,1000)}")
         self.color = color or (int(255*random.random()),int(255*random.random()),int(255*random.random()))
         
     def get_volume(self):
@@ -91,7 +82,20 @@ class State:
         return ((3*self.get_volumes())/(4*math.pi))**(1/3)
         
     def get_acc(self, G):
-        return acc_blas(self.positions, self.masses, G)  # Magic!!!
+        if self.gpu:
+            return self.get_acc_gpu(G)
+        else:
+            return acc_blas(self.positions, self.masses, G)  # Magic!!!
+    
+    def get_acc_gpu(self, G):
+        masses = self.masses/ME
+        mass_matrix = masses.reshape((1, -1, 1))*masses.reshape((-1, 1, 1))
+        disps = self.positions.reshape((1, -1, 3)) - self.positions.reshape((-1, 1, 3))
+        dists = cp.linalg.norm(disps, axis=2)
+        dists[dists == 0] = 1
+        forces = (ME*G*disps*mass_matrix)/cp.expand_dims(dists, 2)**3
+        a = (forces.sum(axis=1)/masses.reshape(-1, 1))
+        return a
 
     def add_objects(self, objects):
         masses = []
@@ -118,21 +122,10 @@ class State:
         self.densities = self.densities[keep]
         self.positions = self.positions[keep]
         self.velocities = self.velocities[keep]
-        for i in sorted(absorbed.nonzero()[0].tolist(), reverse=True):
+        for i in sorted(remove, reverse=True):
             del self.names[i]
             del self.colors[i]
         self.n_objects = len(self.masses)
-
-    
-    def get_acc_gpu(self, G):
-        masses = self.masses/ME
-        mass_matrix = masses.reshape((1, -1, 1))*masses.reshape((-1, 1, 1))
-        disps = self.positions.reshape((1, -1, 3)) - self.positions.reshape((-1, 1, 3))
-        dists = cp.linalg.norm(disps, axis=2)
-        dists[dists == 0] = 1
-        forces = (ME*G*disps*mass_matrix)/cp.expand_dims(dists, 2)**3
-        a = (forces.sum(axis=1)/masses.reshape(-1, 1))
-        return a
     
     def collide(self, i, j):
         m_i = self.masses[i]/ME
@@ -153,96 +146,105 @@ class State:
         self.densities[i] = d
     
     def resolve_collisions(self):
-        n = self.n_objects
-        d = pairwise_distances(self.positions, n_jobs=-1, force_all_finite=True)
-        radii = self.get_radii()
-        collision_matrix = d <= np.add.outer(radii,radii)
-        np.fill_diagonal(collision_matrix,False)
-        absorbed = []
-        for i in range(n):
-            if i not in absorbed:
-                for j, c in enumerate(collision_matrix[i]):
-                        if c and j not in absorbed:
-                            if self.masses[i] >= self.masses[j]:
-                                self.collide(i,j)
-                                absorbed.append(j)
-                            else:
-                                self.collide(j,i)
-                                absorbed.append(i)
-        self.masses = np.delete(self.masses, absorbed)
-        self.positions = np.delete(self.positions, absorbed, axis=0)
-        self.velocities = np.delete(self.velocities, absorbed, axis=0)
-        self.densities = np.delete(self.densities, absorbed)
-        for i in sorted(absorbed, reverse=True):
-            del self.names[i]
-            del self.colors[i]
-        self.n_objects = len(self.masses)
+        if self.gpu:
+            return self.resolve_collisions_gpu()
+        else:
+            n = self.n_objects
+            d = pairwise_distances(self.positions, n_jobs=-1, force_all_finite=True)
+            radii = self.get_radii()
+            collision_matrix = d <= np.add.outer(radii,radii)
+            np.fill_diagonal(collision_matrix,False)
+            absorbed = []
+            for i in range(n):
+                if i not in absorbed:
+                    for j, c in enumerate(collision_matrix[i]):
+                            if c and j not in absorbed:
+                                if self.masses[i] >= self.masses[j]:
+                                    self.collide(i,j)
+                                    absorbed.append(j)
+                                else:
+                                    self.collide(j,i)
+                                    absorbed.append(i)
+            self.masses = np.delete(self.masses, absorbed)
+            self.positions = np.delete(self.positions, absorbed, axis=0)
+            self.velocities = np.delete(self.velocities, absorbed, axis=0)
+            self.densities = np.delete(self.densities, absorbed)
+            for i in sorted(absorbed, reverse=True):
+                del self.names[i]
+                del self.colors[i]
+            self.n_objects = len(self.masses)
            
     def resolve_collisions_gpu(self):
+        # Initialize constants
         radii = self.get_radii()
+        masses = self.masses/ME #Scale down for float32
+        nan_array = cp.array([cp.nan,cp.nan,cp.nan], dtype="float32")
+        # Collision matrix
         d = F.pairwise_distances(self.positions)
-        masses = self.masses/ME
-
         collision_matrix = (d <= F.outer_sum(radii,radii))
         cp.fill_diagonal(collision_matrix, False)
-
+        # Bigger masses absorb smaller masses
         m_less = F.less(self.masses, self.masses)
+        # If masses are equal, lower index absorbs higher
         m_equal = cp.tril(F.equal(self.masses, self.masses),-1)
         # Absorbtion matrix
         absorbed_matrix = (m_less+m_equal)*collision_matrix
         # Each object can only be absorbed once; choose the first absorber
         absorbed_matrix_mod = absorbed_matrix.cumsum(axis=1).cumsum(axis=1) == 1
-        # All objects absorbing
+        # Array of all objects absorbing something
         absorbing = cp.max(absorbed_matrix_mod, axis=0)
         # Can only be absorbed if you are not also absorbing
         absorbed_matrix_final = (absorbed_matrix_mod.T*(~absorbing)).T
         absorbed = cp.max(absorbed_matrix_final, axis=1)
-
+        # Can only absorb if you aren't being absorbed
+        absorbing = absorbing & ~absorbed
+        # Masks for 1-D and 3-D arrays
+        mask = ~absorbed_matrix_final.T
+        mask_3d = cp.repeat(cp.expand_dims(mask, axis=2), 3, axis=2)
+        # Calulate weighted quantities
+        moments = masses[:, None] * self.positions        
         momenta = masses[:, None] * self.velocities
-        moments = masses[:, None] * self.positions
         densities_w = masses * self.densities
         m_totals = F.outer_sum(masses, masses)
-        
-        new_positions = (moments + moments[:, None, :])/m_totals[None,:].T
-        new_positions[~absorbing] = 0
-        new_positions = cp.sum(new_positions, axis=0)
-        
-        new_velocities = (momenta + momenta[:, None, :])/m_totals[None,:].T
-        new_velocities[~absorbing] = 0
-        new_velocities = cp.sum(new_velocities, axis=0)
-        
+        # Get new positions
+        new_positions = F.outer_sum(moments, moments)/m_totals[None,:].T
+        cp.putmask(new_positions, mask_3d, nan_array)
+        new_positions = cp.nanmean(new_positions, axis=1)
+        # Get new velocities
+        new_velocities = F.outer_sum(momenta, momenta)/m_totals[None,:].T
+        cp.putmask(new_velocities, mask_3d, nan_array)
+        new_velocities = cp.nanmean(new_velocities, axis=1)
+        # Get new densities
         new_densities = F.outer_sum(densities_w, densities_w)/m_totals
-        new_densities[~absorbing] = None
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            new_densities = cp.nanmean(new_densities, axis=0)
+        cp.putmask(new_densities, mask, cp.nan)
+        new_densities = cp.nanmean(new_densities, axis=1)
+        # Should replace nan values with old values
+        null_objs = new_positions[new_positions]
+        if np.isnan(np.sum(new_positions[absorbing])):
+            print(masses[absorbing])
+            print(self.positions[absorbing])
+            print(new_positions[absorbing])
         
-        self.masses = ME*(masses + (cp.sum(masses*absorbed_matrix_final.T, axis=1)))*(~absorbed)
+        # Update masses, densities, positions, and velocities
+        self.masses = ME*(masses + (cp.sum(masses*absorbed_matrix_final.T, axis=1)))
         self.densities[absorbing] = new_densities[absorbing]
         self.positions[absorbing] = new_positions[absorbing]
         self.velocities[absorbing] = new_velocities[absorbing]
-        
+        # Remove absorbed objects
         self.masses = self.masses[~absorbed]
         self.densities = self.densities[~absorbed]
         self.positions = self.positions[~absorbed]
         self.velocities = self.velocities[~absorbed]
-        
         for i in sorted(absorbed.nonzero()[0].tolist(), reverse=True):
             del self.names[i]
             del self.colors[i]
         self.n_objects = len(self.masses)
         
     def interact(self, collisions=True, G=_G):
-        if self.gpu:
-            a = cp.minimum(self.get_acc_gpu(G), C)
-            self.velocities = cp.minimum(self.velocities + a*self.dt, C)
-        else:  
-            a = np.minimum(self.get_acc(G), C)
-            self.velocities = np.minimum(self.velocities + a*self.dt, C)
+        a = self.xp.minimum(self.get_acc(G), C)
+        self.velocities = self.xp.minimum(self.velocities + a*self.dt, C)
         self.positions = self.positions + self.velocities*self.dt
-        if collisions and self.gpu:
-            self.resolve_collisions_gpu()
-        elif collisions:
+        if collisions:
             self.resolve_collisions()
         self.iterations += 1
         
@@ -314,7 +316,7 @@ class Universe:
                     if validate:
                         valid, invalid_matrices = self.validate_state(state_json)
                         if not valid:
-                            print("Invalid matrices: "+str(invalid_matrices))
+                            print("\nInvalid matrices:\n"+json.dumps(invalid_matrices,indent=2))
                             raise(Exception("Data is invalid"))
                     states.append(state_json)
                     elapsed += 1

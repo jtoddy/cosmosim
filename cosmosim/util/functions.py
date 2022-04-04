@@ -86,13 +86,13 @@ def screen_coordinates_3d(p, scale, offset, rotation, origin):
     theta, phi = rotation
     v0 = rotation_3d(p, theta, phi)
     v1 = np.delete(v0, 2, 0)
-    v = origin + (np.multiply(v1,np.array([1,-1]))*scale)+(offset*scale)
+    v = origin + (np.multiply(v1,np.array([1,1]))*scale)+(offset*scale)
     return v
 
 def screen_coordinates_3d_multi(P, scale, offset, rotation, origin):
     theta, phi = rotation
     S0 = rotation_3d_multi(P, theta, phi)
     S1 = S0[:,[0,1]]
-    S2 = np.multiply(S1,np.array([1,-1]).T)*scale
+    S2 = np.multiply(S1,np.array([1,1]).T)*scale
     S = S2+np.array(origin+(offset*scale))
     return S
