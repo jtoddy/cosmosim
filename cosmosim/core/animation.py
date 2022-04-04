@@ -155,10 +155,10 @@ class InteractiveAnimation:
                     self.selected_object = None
                     self.selected_object_name = None
                 # Click on tracking button
-                elif self.track_btn and self.track_btn.collidepoint(pos) and obj:
+                elif self.track_btn and self.track_btn.collidepoint(pos) and obj != None:
                     self.toggle_tracking(state["names"][obj])
                 # CLick on lock button
-                elif self.lock_btn and self.lock_btn.collidepoint(pos) and obj:
+                elif self.lock_btn and self.lock_btn.collidepoint(pos) and obj != None:
                     self.toggle_locking(state["names"][obj])
                 # Click on planet
                 else:
@@ -180,6 +180,19 @@ class InteractiveAnimation:
     def onscreen(self, coordinates):
         x, y = coordinates
         return (x >= 0 and x <= self.width and y >= 0 and y <= self.height)
+
+    def update_playback_controls(self):
+        # Playback bar
+        bar_length = self.width*0.8
+        bar_start = self.width*0.1
+        bar_end = self.width*0.9
+        bar_height = self.height*0.95
+        pygame.draw.line(self.screen, WHITE, (bar_start, bar_height), (bar_end, bar_height), 5)
+        # Playback tracker
+        progress = self.iterations/self.frames
+        tracker_x = bar_start + (bar_length*progress)
+        tracker_y = bar_height - 10
+        pygame.draw.line(self.screen, WHITE, (tracker_x, tracker_y), (tracker_x, tracker_y+20), 8)
         
             
     def update_simulation_text(self):
@@ -187,24 +200,24 @@ class InteractiveAnimation:
         effective_fps = self.clock.get_fps()
         fps_text = "FPS: %.0f" % effective_fps
         fps_img = self.font.render(fps_text, True, WHITE)
-        self.screen.blit(fps_img, (self.width*0.85, 20))
+        self.screen.blit(fps_img, (self.width*0.80, 20))
         # Update scale
         scale = self.context['scale']
         scale_text = "Scale: {:.2e}".format(scale)
         scale_img = self.font.render(scale_text, True, WHITE)
-        self.screen.blit(scale_img, (self.width*0.85, 40))
+        self.screen.blit(scale_img, (self.width*0.80, 40))
         # Update iterations
         iterations = self.iterations
         frames = self.frames
         iterations_text = f"Iterations: {iterations}/{frames}"
         iterations_img = self.font.render(iterations_text, True, WHITE)
-        self.screen.blit(iterations_img, (self.width*0.85, 60))
+        self.screen.blit(iterations_img, (self.width*0.80, 60))
         # Update elapsed time
         elapsed_time = iterations*self.current_state.get("dt",1)
         elapsed_time_formatted = str(datetime.timedelta(seconds=elapsed_time))
         elapsed_time_text = f"Elapsed time: {elapsed_time_formatted}"
         elapsed_time_img = self.font.render(elapsed_time_text, True, WHITE)
-        self.screen.blit(elapsed_time_img, (self.width*0.85, 80))
+        self.screen.blit(elapsed_time_img, (self.width*0.80, 80))
         # Paused text
         if self.paused:
             paused_text = "PAUSED"
@@ -320,7 +333,7 @@ class InteractiveAnimation:
                     
                         
                         # Determine offset
-                        if self.locked_object:
+                        if self.locked_object != None:
                             obj_position = state["positions"][state["names"].index(self.locked_object)]
                             self.context["offset"] = np.array([0.0,0.0])
                             new_offset = (self.context["origin"] - F.screen_coordinates_3d(obj_position, **self.context))
@@ -337,6 +350,8 @@ class InteractiveAnimation:
                         self.update_simulation_text()
                         # Update selected object text
                         self.update_selected_object_text()
+                        # Update playback controls
+                        self.update_playback_controls()
                         # Handle user inputs
                         for event in pygame.event.get():
                             self.handle_user_input(event)

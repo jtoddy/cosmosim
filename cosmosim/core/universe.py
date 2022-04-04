@@ -154,6 +154,9 @@ class State:
             radii = self.get_radii()
             collision_matrix = d <= np.add.outer(radii,radii)
             np.fill_diagonal(collision_matrix,False)
+            # Return false if no collisions
+            if not np.max(collision_matrix):
+                return False
             absorbed = []
             for i in range(n):
                 if i not in absorbed:
@@ -173,6 +176,7 @@ class State:
                 del self.names[i]
                 del self.colors[i]
             self.n_objects = len(self.masses)
+            return True
            
     def resolve_collisions_gpu(self):
         # Initialize constants
@@ -183,23 +187,27 @@ class State:
         d = F.pairwise_distances(self.positions)
         collision_matrix = (d <= F.outer_sum(radii,radii))
         cp.fill_diagonal(collision_matrix, False)
+        # Return false if no collisions
+        if not cp.max(collision_matrix):
+            return False
         # Bigger masses absorb smaller masses
         m_less = F.less(self.masses, self.masses)
         # If masses are equal, lower index absorbs higher
         m_equal = cp.tril(F.equal(self.masses, self.masses),-1)
         # Absorbtion matrix
-        absorbed_matrix = (m_less+m_equal)*collision_matrix
+        absorbed_matrix_leq = (m_less+m_equal)*collision_matrix
         # Each object can only be absorbed once; choose the first absorber
-        absorbed_matrix_mod = absorbed_matrix.cumsum(axis=1).cumsum(axis=1) == 1
+        absorbed_matrix_leq_first = absorbed_matrix_leq.cumsum(axis=1).cumsum(axis=1) == 1
         # Array of all objects absorbing something
-        absorbing = cp.max(absorbed_matrix_mod, axis=0)
+        absorbing = cp.max(absorbed_matrix_leq_first, axis=0)
         # Can only be absorbed if you are not also absorbing
-        absorbed_matrix_final = (absorbed_matrix_mod.T*(~absorbing)).T
-        absorbed = cp.max(absorbed_matrix_final, axis=1)
-        # Can only absorb if you aren't being absorbed
-        absorbing = absorbing & ~absorbed
+        absorbed_matrix = (absorbed_matrix_leq_first.T*(~absorbing)).T
+        absorbed = cp.max(absorbed_matrix, axis=1)
+        # Create absorbing matrix and array
+        absorbing_matrix = absorbed_matrix.T
+        absorbing = cp.max(absorbing_matrix, axis=1)
         # Masks for 1-D and 3-D arrays
-        mask = ~absorbed_matrix_final.T
+        mask = ~absorbing_matrix
         mask_3d = cp.repeat(cp.expand_dims(mask, axis=2), 3, axis=2)
         # Calulate weighted quantities
         moments = masses[:, None] * self.positions        
@@ -219,14 +227,12 @@ class State:
         cp.putmask(new_densities, mask, cp.nan)
         new_densities = cp.nanmean(new_densities, axis=1)
         # Should replace nan values with old values
-        null_objs = new_positions[new_positions]
         if np.isnan(np.sum(new_positions[absorbing])):
             print(masses[absorbing])
             print(self.positions[absorbing])
             print(new_positions[absorbing])
-        
         # Update masses, densities, positions, and velocities
-        self.masses = ME*(masses + (cp.sum(masses*absorbed_matrix_final.T, axis=1)))
+        self.masses = ME*(masses + (cp.sum(masses*absorbing_matrix, axis=1)))
         self.densities[absorbing] = new_densities[absorbing]
         self.positions[absorbing] = new_positions[absorbing]
         self.velocities[absorbing] = new_velocities[absorbing]
@@ -239,13 +245,16 @@ class State:
             del self.names[i]
             del self.colors[i]
         self.n_objects = len(self.masses)
+        return True
         
     def interact(self, collisions=True, G=_G):
         a = self.xp.minimum(self.get_acc(G), C)
         self.velocities = self.xp.minimum(self.velocities + a*self.dt, C)
         self.positions = self.positions + self.velocities*self.dt
         if collisions:
-            self.resolve_collisions()
+            colliding = True
+            while colliding:
+                colliding = self.resolve_collisions()
         self.iterations += 1
         
     def state_json(self):

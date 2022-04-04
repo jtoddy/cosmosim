@@ -5,15 +5,11 @@
 	* Speed controls
 * Object IDs
 * Collision animation
-* Add/remove Object methods for State class
 * Advanced satellite creation
 	* Eccentricity
 	* Semi-major axis
 	* Inclination
 	* etc
-* Set origin
-	* Key binding --> Offset = origin
-	* Set origin option for Object; should follow Object
 * Improve object info overlay
 	* Alpha
 	* Modularize
