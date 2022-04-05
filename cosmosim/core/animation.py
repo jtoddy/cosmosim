@@ -5,11 +5,13 @@ import pickle
 import pygame
 import numpy as np
 import datetime
+import json
+import math
 from cosmosim.util.constants import WHITE, BLACK, ME
+from cosmosim.util.json_zip import json_unzip
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation, writers
-import json
 
 
           
@@ -46,7 +48,9 @@ class InteractiveAnimation:
             self.filelist = os.listdir(path)
             for i in tqdm(self.filelist, desc="Loading data"):
                 with open(path + i, 'r') as f:
-                    self.states = json.load(f)
+                    #self.states.append(*json.load(f))
+                    states = json_unzip(json.load(f))
+                    self.states += states
         else:
             self.states = data
             
@@ -57,26 +61,31 @@ class InteractiveAnimation:
         for field in ["masses","densities","positions"]:
             state[field] = np.array(state[field])
         Q = self.screen_positions
-        for i in range(state["n"]):
-            q = Q[i]
-            name = state["names"][i]
+        Z = self.Z
+        names = state["names"]
+        colors = state["colors"]
+        radii = self.radii
+        objects = sorted(zip(Q, Z, names, colors, radii), key=lambda x: x[1])
+        for q, z, name, color, _radius in objects:
             # Trace the object's path if it is tracked
             if name in self.tracked_objects.keys():
                 history = self.tracked_objects[name]
-                color = state["colors"][i]
                 self.draw_history(history, color)
             if self.onscreen(q):
-                radius = max(1, int(self.radii[i]*self.context['scale']))
-                if self.selected_object == i:
+                distance_to_viewer = z
+                angular_diameter = 2*_radius/distance_to_viewer
+                apparent_radius = _radius * self.context["scale"]
+                radius = max(1, apparent_radius)
+                if self.selected_object_name == name:
                     # Highlight the planet if selected
                     pygame.draw.circle(self.canvas, WHITE, q.astype(int), max(int(radius*2), 4)) 
                     pygame.draw.circle(self.canvas, BLACK, q.astype(int), max(int(radius*1.85), 2))
-                pygame.draw.circle(self.canvas, state["colors"][i], q.astype(int), radius)
+                pygame.draw.circle(self.canvas, color, q.astype(int), radius)
         self.screen.blit(self.canvas, [0.0,0.0])
 
     def draw_history(self, history, color):
         h_length = len(history)
-        history_sc = F.screen_coordinates_3d_multi(np.array(history), **self.context)
+        history_sc = F.screen_coordinates_3d_multi(np.array(history), **self.context)[0]
         for _i in range(h_length):
             if _i > 0:
                 q0 = history_sc[_i-1]
@@ -233,7 +242,7 @@ class InteractiveAnimation:
                 # Info box dimensions
                 INFO_X = 10
                 INFO_Y = 10
-                INFO_WIDTH = 450
+                INFO_WIDTH = 420
                 INFO_HEIGHT = 150
                 BTN_SIZE = 30
                 TXT_PAD = 10
@@ -270,20 +279,29 @@ class InteractiveAnimation:
                 self.screen.blit(lock_img, (INFO_X+TXT_PAD+(INFO_WIDTH/4), INFO_Y2+TXT_PAD-1))
                 
                 # Planet info text
+                p = state["positions"][obj]
                 v = state["velocities"][obj]
+                q = self.screen_positions[obj]
+                z = self.Z[obj]
                 vmag = np.linalg.norm(np.array(v))
                 ptext1 = name.upper()
                 ptext2 = "Mass: {:.2e} Earth masses".format(state["masses"][obj]/ME)
                 ptext3 = "Radius: {:.2e} km".format(self.radii[obj]/1000)
-                ptext4 = "Velocity: [{:.2e}, {:.2e}, {:.2e}] {:.2e} m/s".format(*v, vmag)
+                ptext4 = "Position: [{:.1e}, {:.1e}, {:.1e}] m".format(*p)
+                ptext5 = "Velocity: [{:.1e}, {:.1e}, {:.1e}] {:.1e} m/s".format(*v, vmag)
+                ptext6 = "Screen coordinates: [{:.0f}, {:.0f}] z={:.0f}".format(*q, z)
                 pimg1 = self.font.render(ptext1, True, WHITE)
                 pimg2 = self.font.render(ptext2, True, WHITE)
                 pimg3 = self.font.render(ptext3, True, WHITE) 
                 pimg4 = self.font.render(ptext4, True, WHITE)
+                pimg5 = self.font.render(ptext5, True, WHITE)
+                pimg6 = self.font.render(ptext6, True, WHITE)
                 self.screen.blit(pimg1, (20, INFO_Y + TXT_PAD))
                 self.screen.blit(pimg2, (20, INFO_Y + 2*TXT_PAD + 20))
                 self.screen.blit(pimg3, (20, INFO_Y + 2*TXT_PAD + 40))
                 self.screen.blit(pimg4, (20, INFO_Y + 2*TXT_PAD + 60))
+                self.screen.blit(pimg5, (20, INFO_Y + 2*TXT_PAD + 80))
+                self.screen.blit(pimg6, (20, INFO_Y + 2*TXT_PAD + 100))
             else:
                 self.selected_object = None
             
@@ -330,20 +348,17 @@ class InteractiveAnimation:
                         self.current_state[field] = np.array(state[field])
                     self.radii = [F.get_radius(m,d) for m, d in zip(state["masses"], state["densities"])]
                     while self.running and not self.restart and (self.paused or new_state):
-                    
-                        
                         # Determine offset
                         if self.locked_object != None:
                             obj_position = state["positions"][state["names"].index(self.locked_object)]
                             self.context["offset"] = np.array([0.0,0.0])
-                            new_offset = (self.context["origin"] - F.screen_coordinates_3d(obj_position, **self.context))
+                            new_offset = (self.context["origin"] - F.screen_coordinates_3d(obj_position, **self.context)[0])
                             self.context["offset"] = new_offset/self.context["scale"]
-                            
                         # Clear the screen
                         self.screen.fill(BLACK)
                         self.canvas.fill(BLACK)
                         # Update screen positions
-                        self.screen_positions = F.screen_coordinates_3d_multi(state["positions"], **self.context)
+                        self.screen_positions, self.Z = F.screen_coordinates_3d_multi(state["positions"], **self.context)
                         # Draw
                         self.draw(state)
                         # Update simulation text
@@ -448,7 +463,7 @@ class MP4Animation:
             state[field] = np.array(state[field])
         self.current_state = state
         radii = [F.get_radius(m,d) for m, d in zip(state["masses"], state["densities"])]
-        positions = [F.screen_coordinates_3d(p, **self.context) for p in state["positions"]]
+        positions = [F.screen_coordinates_3d(p, **self.context)[0] for p in state["positions"]]
         radii = [max(1, int(r*scale)) for r in radii]
         colors = [(c[0]/255, c[1]/255, c[2]/255) for c in state["colors"]]
         self.space.set_offsets(positions)

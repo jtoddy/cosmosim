@@ -10,6 +10,7 @@ from tqdm import tqdm
 import cosmosim.util.functions as F
 from cosmosim.util.blas import acc_blas
 from cosmosim.util.constants import ME, G as _G, C
+from cosmosim.util.json_zip import json_zip
 import cosmosim.util.pronounceable.main as prnc
 from sklearn.metrics import pairwise_distances
 import json
@@ -329,11 +330,14 @@ class Universe:
                             raise(Exception("Data is invalid"))
                     states.append(state_json)
                     elapsed += 1
-                    if elapsed >= self.iterations:
+                    if elapsed >= self.iterations: 
                         break                    
-                print(f"Writing file {n}...")
+                print(f"Writing file {n+1}/{nfiles}...")
                 with open(path, "w") as f:
-                    json.dump(states,f)
+                    #json.dump(states,f)
+                    states_compressed = json_zip(states)
+                    json.dump(states_compressed, f)
+                print("Done!")
         else:
             states = []
             for i in tqdm(range(self.iterations), desc="Running simulation"):
