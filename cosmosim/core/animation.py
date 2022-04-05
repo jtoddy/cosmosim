@@ -7,12 +7,11 @@ import numpy as np
 import datetime
 import json
 import math
-from cosmosim.util.constants import WHITE, BLACK, ME
+from cosmosim.util.constants import WHITE, BLACK, ME, AU
 from cosmosim.util.json_zip import json_unzip
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation, writers
-
 
           
 class InteractiveAnimation:
@@ -56,30 +55,42 @@ class InteractiveAnimation:
             
         self.frames = len(self.states)
         self.states.sort(key=lambda x: x["iterations"])
+
+    def onscreen(self, coordinates, z):
+        x, y = coordinates
+        below_viewer = (self.width/self.context["scale"]) + z > 0
+        onscreen = (x >= 0 and x <= self.width and y >= 0 and y <= self.height)
+        return onscreen & below_viewer
                     
     def draw(self, state):
         for field in ["masses","densities","positions"]:
             state[field] = np.array(state[field])
         Q = self.screen_positions
         Z = self.Z
+        scale = self.context["scale"]
         names = state["names"]
         colors = state["colors"]
         radii = self.radii
         objects = sorted(zip(Q, Z, names, colors, radii), key=lambda x: x[1])
-        for q, z, name, color, _radius in objects:
+        for q, z, name, color, r in objects:
             # Trace the object's path if it is tracked
             if name in self.tracked_objects.keys():
                 history = self.tracked_objects[name]
                 self.draw_history(history, color)
-            if self.onscreen(q):
-                distance_to_viewer = z
-                angular_diameter = 2*_radius/distance_to_viewer
-                apparent_radius = _radius * self.context["scale"]
+            # Ensure object is on the screen
+            if self.onscreen(q,z):
+                # Get apparent radius
+                d_z0 = self.width/scale
+                d_object = z + d_z0
+                d_factor = math.atan(r/d_object)
+                apparent_radius = r*scale*d_factor
+                # Ensure object is always visible
                 radius = max(1, apparent_radius)
+                # Highlight the object if selected
                 if self.selected_object_name == name:
-                    # Highlight the planet if selected
                     pygame.draw.circle(self.canvas, WHITE, q.astype(int), max(int(radius*2), 4)) 
                     pygame.draw.circle(self.canvas, BLACK, q.astype(int), max(int(radius*1.85), 2))
+                # Draw the object
                 pygame.draw.circle(self.canvas, color, q.astype(int), radius)
         self.screen.blit(self.canvas, [0.0,0.0])
 
@@ -185,10 +196,6 @@ class InteractiveAnimation:
                 self.context['rotation'] += np.array([dtheta,dphi])
         else:
             pass
-        
-    def onscreen(self, coordinates):
-        x, y = coordinates
-        return (x >= 0 and x <= self.width and y >= 0 and y <= self.height)
 
     def update_playback_controls(self):
         # Playback bar
@@ -289,7 +296,7 @@ class InteractiveAnimation:
                 ptext3 = "Radius: {:.2e} km".format(self.radii[obj]/1000)
                 ptext4 = "Position: [{:.1e}, {:.1e}, {:.1e}] m".format(*p)
                 ptext5 = "Velocity: [{:.1e}, {:.1e}, {:.1e}] {:.1e} m/s".format(*v, vmag)
-                ptext6 = "Screen coordinates: [{:.0f}, {:.0f}] z={:.0f}".format(*q, z)
+                ptext6 = "Screen coordinates: [{:.0f}, {:.0f}] z={:.1e}".format(*q, z)
                 pimg1 = self.font.render(ptext1, True, WHITE)
                 pimg2 = self.font.render(ptext2, True, WHITE)
                 pimg3 = self.font.render(ptext3, True, WHITE) 
