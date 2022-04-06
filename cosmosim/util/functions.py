@@ -47,6 +47,7 @@ def rotation_3d(v, theta, phi):
     return np.matmul(R,v)
 
 def rotation_3d_multi(M, theta, phi):
+    M = np.array(M)
     Rtheta = np.array([[np.cos(theta), 0, np.sin(theta)],
                       [0,1,0],
                       [-np.sin(theta), 0, np.cos(theta)]])

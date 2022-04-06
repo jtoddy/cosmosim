@@ -24,6 +24,7 @@ class InteractiveAnimation:
         self.scale = scale        
         self.paused = False
         self.dragging = False
+        self.playback_tracking = False
         self.origin_offset = np.array([self.width/2,self.height/2])
         self.context = {
             "scale":self.scale,
@@ -40,6 +41,8 @@ class InteractiveAnimation:
         self.close_btn = None
         self.track_btn = None
         self.lock_btn = None
+        self.playback_tracker = None
+        self.pauseplay_btn = None
         
         if isinstance(data, str):
             self.states = []
@@ -58,9 +61,8 @@ class InteractiveAnimation:
 
     def onscreen(self, coordinates, z):
         x, y = coordinates
-        below_viewer = (self.width/self.context["scale"]) + z > 0
         onscreen = (x >= 0 and x <= self.width and y >= 0 and y <= self.height)
-        return onscreen & below_viewer
+        return onscreen
                     
     def draw(self, state):
         for field in ["masses","densities","positions"]:
@@ -79,13 +81,8 @@ class InteractiveAnimation:
                 self.draw_history(history, color)
             # Ensure object is on the screen
             if self.onscreen(q,z):
-                # Get apparent radius
-                d_z0 = self.width/scale
-                d_object = z + d_z0
-                d_factor = math.atan(r/d_object)
-                apparent_radius = r*scale*d_factor
                 # Ensure object is always visible
-                radius = max(1, apparent_radius)
+                radius = max(1, r*scale)
                 # Highlight the object if selected
                 if self.selected_object_name == name:
                     pygame.draw.circle(self.canvas, WHITE, q.astype(int), max(int(radius*2), 4)) 
@@ -122,6 +119,7 @@ class InteractiveAnimation:
     def handle_user_input(self, event):
         obj = self.selected_object
         state = self.current_state
+        pos = pygame.mouse.get_pos()
         # Stop simulation when user quits
         if event.type == pygame.QUIT:
             print("Quitting...")
@@ -156,8 +154,12 @@ class InteractiveAnimation:
         elif event.type == pygame.MOUSEBUTTONDOWN:
             # Left click drags view
             if event.button == 1:
-                self.dragging = True
-                self.mouse_x, self.mouse_y = event.pos 
+                if self.playback_tracker and self.playback_tracker.collidepoint(pos):
+                    self.playback_tracking = True
+                    self.mouse_x, self.mouse_y = event.pos
+                else:
+                    self.dragging = True
+                    self.mouse_x, self.mouse_y = event.pos 
             # Right click resets view
             elif event.button == 3:
                 self.context['offset']  = np.array([0.0,0.0])
@@ -169,17 +171,20 @@ class InteractiveAnimation:
             # Releasing left click
             if event.button == 1:            
                 self.dragging = False
-                pos = pygame.mouse.get_pos()
+                self.playback_tracking = False
                 # Click on close button
                 if self.close_btn and self.close_btn.collidepoint(pos):
                     self.selected_object = None
                     self.selected_object_name = None
-                # Click on tracking button
+                # Click on object tracking button
                 elif self.track_btn and self.track_btn.collidepoint(pos) and obj != None:
                     self.toggle_tracking(state["names"][obj])
                 # CLick on lock button
                 elif self.lock_btn and self.lock_btn.collidepoint(pos) and obj != None:
                     self.toggle_locking(state["names"][obj])
+                # Click on pause/play button
+                elif self.pauseplay_btn_rect and self.pauseplay_btn_rect.collidepoint(pos):
+                    self.paused = not self.paused
                 # Click on planet
                 else:
                     selected_objs = [i for i, p in enumerate(self.screen_positions) if np.linalg.norm(p - pos) <= max(self.radii[i]*self.context['scale'],10.0)]
@@ -194,6 +199,20 @@ class InteractiveAnimation:
                 dtheta = (mouse_x0 - self.mouse_x)/self.width
                 dphi = (mouse_y0 - self.mouse_y)/self.height
                 self.context['rotation'] += np.array([dtheta,dphi])
+                self.mouse_x = mouse_x0
+                self.mouse_y = mouse_y0
+            elif (
+                    self.playback_tracking 
+                    and self.iterations > 0 
+                    and self.iterations < self.frames
+                    #and self.playback_tracker.collidepoint(event.pos)
+                ):
+                mouse_x0, mouse_y0 = event.pos
+                pct_of_bar_moved = (mouse_x0 - self.mouse_x)/(self.width*0.8)
+                frames_moved = int(self.frames*pct_of_bar_moved)
+                self.iterations = min(max(self.iterations + frames_moved, 0), self.frames)
+                self.mouse_x = mouse_x0
+                self.mouse_y = mouse_y0
         else:
             pass
 
@@ -206,10 +225,19 @@ class InteractiveAnimation:
         pygame.draw.line(self.screen, WHITE, (bar_start, bar_height), (bar_end, bar_height), 5)
         # Playback tracker
         progress = self.iterations/self.frames
-        tracker_x = bar_start + (bar_length*progress)
+        tracker_x = bar_start + min(max((bar_length*progress),0), bar_length)
         tracker_y = bar_height - 10
-        pygame.draw.line(self.screen, WHITE, (tracker_x, tracker_y), (tracker_x, tracker_y+20), 8)
-        
+        self.playback_tracker = pygame.draw.line(self.screen, WHITE, (tracker_x, tracker_y), (tracker_x, tracker_y+20), 8)
+        # Pause/play button
+        btn_size = 25
+        if self.paused:
+            self.pauseplay_btn = pygame.image.load("cosmosim/resources/play_icon.png")
+        else:
+            self.pauseplay_btn = pygame.image.load("cosmosim/resources/pause_icon.png")
+        self.pauseplay_btn = pygame.transform.scale(self.pauseplay_btn, (btn_size, btn_size))
+        self.pauseplay_btn_rect = self.pauseplay_btn.get_rect()
+        self.pauseplay_btn_rect = self.pauseplay_btn_rect.move(bar_end+15, bar_height-btn_size/2)
+        self.screen.blit(self.pauseplay_btn, (bar_end+15, bar_height-btn_size/2))
             
     def update_simulation_text(self):
         # Update FPS
@@ -225,7 +253,7 @@ class InteractiveAnimation:
         # Update iterations
         iterations = self.iterations
         frames = self.frames
-        iterations_text = f"Iterations: {iterations}/{frames}"
+        iterations_text = f"Frames: {iterations}/{frames} ({iterations/frames:.0%})"
         iterations_img = self.font.render(iterations_text, True, WHITE)
         self.screen.blit(iterations_img, (self.width*0.80, 60))
         # Update elapsed time
@@ -326,7 +354,9 @@ class InteractiveAnimation:
         self.paused = paused
         while self.running:
             while not self.restart:
-                for state in self.states:
+                #for state in self.states:
+                while self.iterations < self.frames:
+                    state = self.states[self.iterations]
                     new_state = True
                     self.current_state = state
                     # Update selected object index
@@ -355,6 +385,8 @@ class InteractiveAnimation:
                         self.current_state[field] = np.array(state[field])
                     self.radii = [F.get_radius(m,d) for m, d in zip(state["masses"], state["densities"])]
                     while self.running and not self.restart and (self.paused or new_state):
+                        # Refresh state
+                        state = self.states[self.iterations]
                         # Determine offset
                         if self.locked_object != None:
                             obj_position = state["positions"][state["names"].index(self.locked_object)]
