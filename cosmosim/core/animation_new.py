@@ -23,6 +23,8 @@ class Object:
         self.color = color
         self.density = density
         self.radius = self.get_radius()
+        self.screen_position = None
+        self.z = None
     
     def get_radius(self):
         volume = self.mass/self.density
@@ -32,21 +34,25 @@ class Object:
     
 class Observer:
     
-    def __init__(self, position, orientation):
+    def __init__(self, position, theta=0.0, phi=0.0):
         self.position = position
-        self.orientation = orientation
+        self.theta = theta
+        self.phi = phi
 
 
 class Animation:
     
-    def __init__(self, data, width, height, fps):
+    def __init__(self, data, width=1600, height=1000, fps=60, scale=1.3e-6, observer_params=None):
         self.width = width
         self.height = height
         self.fps = fps
-        self.observer = Observer()
+        self.scale = scale
+        observer_params = observer_params or {"position":[0.0, 0.0, 1/scale], "theta":0.0, "phi":0.0}
+        self.observer = Observer(**observer_params)
         self.states = self.load_data(data)
         self.frames = len(self.states)
         self.initialize_ui()
+        self.play()
         
     def load_data(self, data):
         if isinstance(data, str):
@@ -62,12 +68,81 @@ class Animation:
         return states
     
     def initialize_ui(self):
-        pass
+        self.dragging = False
         
     def get_screen_position(self, obj):
         p0 = obj.position
         p_obs = self.observer.position
-        o_obs = self.observer.orientation
+        p1 = p0 + p_obs
+        p2 = F.rotation_3d(p1, self.observer.theta, self.observer.phi)
+        p3 = p2*self.scale
+        p = p3[:2] + [self.width/2,self.height/2]
+        z = p3[2]
+        return p, z
+
+    def draw(self, obj):
+        r = math.atan(obj.radius/obj.z)*self.scale*obj.radius
+        pygame.draw.circle(self.canvas, obj.color, obj.screen_position.astype(int), r)
+
+    def update_info_text(self):
+        # Update FPS
+        effective_fps = self.clock.get_fps()
+        fps_text = "FPS: %.0f" % effective_fps
+        fps_img = self.font.render(fps_text, True, WHITE)
+        self.screen.blit(fps_img, (self.width*0.80, 20))
+
+    def handle_user_input(self, event):
+        if event.type == pygame.QUIT:
+            print("Quitting...")
+            self.running = False
+        elif event.type == pygame.MOUSEWHEEL:
+            # Wheel up zooms in 5%
+            if event.y > 0:
+                self.scale  *= 1.05**abs(event.y) 
+            # Wheel down zooms out 5%
+            elif event.y < 0:
+                self.scale  *= 0.95**abs(event.y)
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            # Left click drags view
+            if event.button == 1:
+                self.dragging = True
+                self.mouse_x, self.mouse_y = event.pos 
+        elif event.type == pygame.MOUSEBUTTONUP:
+            # Releasing left click
+            if event.button == 1:            
+                self.dragging = False
+        elif event.type == pygame.MOUSEMOTION:
+            # Dragging mouse rotates the screen
+            if self.dragging:
+                mouse_x0, mouse_y0 = event.pos
+                dtheta = (mouse_x0 - self.mouse_x)/self.width
+                dphi = (mouse_y0 - self.mouse_y)/self.height
+                self.observer.theta += dtheta
+                self.observer.phi += dphi
+                self.mouse_x = mouse_x0
+                self.mouse_y = mouse_y0
+
+
+    def get_objects(self, state):
+        objects = []
+        for i in range(state["n"]):
+            properties = {
+                "name": state["names"][i],
+                "position": np.array(state["positions"][i]),
+                "velocity": np.array(state["velocities"][i]),
+                "mass": state["masses"][i],
+                "color": state["colors"][i],
+                "density": state["densities"][i]
+
+            }
+            obj = Object(**properties)
+            q, z = self.get_screen_position(obj)
+            obj.screen_position = q
+            obj.z = z
+            objects.append(obj)
+        objects.sort(key=lambda x: x.z)
+        return objects
+
         
     def play(self):
         pygame.init()
@@ -79,8 +154,28 @@ class Animation:
         self.font = pygame.font.SysFont(None, 24)
         self.running = True
         self.frame = 0
-        while running:
-            state = self.states[frame]
+        while self.running:
+            state = self.states[self.frame] 
+            objects = self.get_objects(state)
+            self.canvas.fill(BLACK)
+            for obj in objects:
+                self.draw(obj)
+            self.screen.blit(self.canvas, [0.0,0.0])
+            # Handle user inputs
+            for event in pygame.event.get():
+                self.handle_user_input(event)
+            # Update info text
+            self.update_info_text()
+            pygame.display.flip()
+            self.clock.tick(self.fps)
+            if self.frame >= self.frames:
+                self.running = False
+            self.frame += 1
+        pygame.quit()
+
+
+
+
             
         
     
