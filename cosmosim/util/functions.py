@@ -1,4 +1,5 @@
 import numpy as np
+import random
 try:
     import cupy as cp
 except:
@@ -19,6 +20,18 @@ def normalize(v):
     if norm == 0: 
        return v
     return v / norm
+
+def random_point_in_sphere(r=1, origin=[0.0,0.0,0.0]):
+    u = random.random()
+    x = np.random.normal()
+    y = np.random.normal()
+    z = np.random.normal()
+    mag = (x**2 + y**2 + z**2)**(1/2)
+    x /= mag
+    y /= mag
+    z /= mag
+    c = r*u**(1/3)
+    return np.array([x*c, y*c, z*c]) + np.array(origin)
 
 def to_cartesian(r, theta, origin=[0,0]):
     y = r*np.sin(theta) + origin[0]

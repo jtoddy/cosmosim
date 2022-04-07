@@ -13,6 +13,80 @@ from tqdm import tqdm
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation, writers
 
+class Object:
+    
+    def __init__(self, name, position, velocity, mass, color, density):
+        self.name =  name
+        self.position = position
+        self.velocity = velocity
+        self.mass = mass
+        self.color = color
+        self.density = density
+        self.radius = self.get_radius()
+    
+    def get_radius(self):
+        volume = self.mass/self.density
+        radius = ((3*volume)/(4*math.pi))**(1/3)
+        return radius
+    
+    
+class Observer:
+    
+    def __init__(self, position, orientation):
+        self.position = position
+        self.orientation = orientation
+
+
+class Animation:
+    
+    def __init__(self, data, width, height, fps):
+        self.width = width
+        self.height = height
+        self.fps = fps
+        self.observer = Observer()
+        self.states = self.load_data(data)
+        self.frames = len(self.states)
+        self.initialize_ui()
+        
+    def load_data(self, data):
+        if isinstance(data, str):
+            states = []
+            path = data
+            filelist = os.listdir(path)
+            for i in tqdm(filelist, desc="Loading data"):
+                with open(path + i, 'r') as f:
+                    states += json_unzip(json.load(f))
+        else:
+            states = data
+        states.sort(key=lambda x: x["iterations"])
+        return states
+    
+    def initialize_ui(self):
+        pass
+        
+    def get_screen_position(self, obj):
+        p0 = obj.position
+        p_obs = self.observer.position
+        o_obs = self.observer.orientation
+        
+    def play(self):
+        pygame.init()
+        pygame.display.set_caption('cosmosim 0.10')
+        self.clock = pygame.time.Clock()
+        self.screen = pygame.display.set_mode([self.width, self.height])
+        self.screen.set_alpha(None)
+        self.canvas = pygame.Surface((self.width, self.height))
+        self.font = pygame.font.SysFont(None, 24)
+        self.running = True
+        self.frame = 0
+        while running:
+            state = self.states[frame]
+            
+        
+    
+
+    
+
           
 class InteractiveAnimation:
     
@@ -424,108 +498,3 @@ class InteractiveAnimation:
     def clear_tracking_histories(self):
         for obj in self.tracked_objects:
             self.tracked_objects[obj] = []
-        
-
-class MP4Animation:
-    
-    def __init__(self, data, outpath, width=1000, height=1000, fps=60, scale=1.3e-6, n_frames=None, context={}):
-        self.width = width
-        self.height = height
-        self.fps = fps
-        self.default_scale = scale
-        self.scale = scale        
-        self.paused = False
-        self.dragging = False
-        self.outpath = outpath
-        self.context = {
-            "scale":self.scale,
-            "offset":np.array([0.0,0.0]),
-            "rotation":np.array([0.0, 0.0]),
-            "origin":np.array([self.width/2,self.height/2]),
-            **context
-        }
-        
-        if isinstance(data, str):
-            self.states = []
-            path = data
-            self.filelist = os.listdir(path)
-            loaded_frames = 0
-            for i in tqdm(self.filelist, desc="Loading data"):
-                with open(path + i, 'rb') as f:
-                    while (not n_frames or loaded_frames < n_frames):
-                        try:
-                            state = pickle.load(f)
-                            self.states.append(state)
-                            loaded_frames += 1
-                        except EOFError:
-                            break
-        else:
-            self.states = data
-            
-        self.frames = n_frames or len(self.states)
-        px = 1/plt.rcParams['figure.dpi']  # pixel in inches
-        figsize=(self.width*px, self.height*px, )
-        self.fig = plt.figure(figsize=figsize)
-        self.fig.subplots_adjust(left=0, bottom=0, right=1, top=1, wspace=None, hspace=None)
-        self.ax = plt.axes(xlim=(0,width), ylim=(0,height))
-        self.ax.set_facecolor("black")
-        self.space = plt.scatter([],[],[],[])
-        self.text = self.ax.text(self.width*0.85, self.height - 40, "", color="white")
-    
-    def init(self):
-        self.space.set_offsets([])
-        self.text.set_text("")
-        return self.space, self.text
-    
-    def info_text(self, i):
-        # Update scale
-        scale = self.context['scale']
-        scale_text = "Scale: {:.2e}".format(scale)
-        # Update iterations
-        iterations = i
-        frames = self.frames
-        iterations_text = f"Frame: {iterations}/{frames}"
-        # Update elapsed time
-        elapsed_time = iterations*self.current_state.get("dt",1)
-        elapsed_time_formatted = str(datetime.timedelta(seconds=elapsed_time))
-        elapsed_time_text = f"Elapsed time: {elapsed_time_formatted}"
-        
-        info_text = f"""{scale_text}
-{iterations_text}
-{elapsed_time_text}"""
-
-        return info_text
-        
-        
-    def animate(self, i):
-        state = self.states[i]
-        scale = self.context['scale']
-        for field in ["masses","densities","positions"]:
-            state[field] = np.array(state[field])
-        self.current_state = state
-        radii = [F.get_radius(m,d) for m, d in zip(state["masses"], state["densities"])]
-        positions = [F.screen_coordinates_3d(p, **self.context)[0] for p in state["positions"]]
-        radii = [max(1, int(r*scale)) for r in radii]
-        colors = [(c[0]/255, c[1]/255, c[2]/255) for c in state["colors"]]
-        self.space.set_offsets(positions)
-        self.space.set_sizes(radii)
-        self.space.set_edgecolors(colors)
-        info_text = self.info_text(i)
-        self.text.set_text(info_text)
-        return self.space, self.text
-    
-    def run(self):
-        writer = writers['ffmpeg']
-        writer = writer(fps=30, metadata=dict(artist='Me'), bitrate=1800)
-        if not os.path.isdir(self.outpath):
-            os.makedirs(self.outpath)
-        existing_filelist = os.listdir(self.outpath)
-        for f in existing_filelist:
-            os.remove(self.outpath + f)
-        anim = FuncAnimation(self.fig, 
-                             self.animate, 
-                             frames=tqdm(range(self.frames), desc="Rendering MP4", file=sys.stdout),
-                             interval=20)
-        print("saving")
-        anim.save(self.outpath+"cosmosim.mp4")
-        print("Done!")
