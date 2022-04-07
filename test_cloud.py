@@ -22,7 +22,7 @@ for i in range(NUM_OBJECTS):
    
 path = "test_data/run1b/data/"
 iterations = 1000
-dt = 60
+dt = 6
 collisions = True
 scale=1e-7
 

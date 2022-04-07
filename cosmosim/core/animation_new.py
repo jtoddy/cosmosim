@@ -52,7 +52,6 @@ class Animation:
         self.states = self.load_data(data)
         self.frames = len(self.states)
         self.initialize_ui()
-        self.play()
         
     def load_data(self, data):
         if isinstance(data, str):
@@ -81,7 +80,8 @@ class Animation:
         return p, z
 
     def draw(self, obj):
-        r = math.atan(obj.radius/obj.z)*self.scale*obj.radius
+        d = F.cartesian_distance(obj.position, self.observer.position)
+        r = max(math.atan(obj.radius/d)*self.scale*obj.radius, 1.0)
         pygame.draw.circle(self.canvas, obj.color, obj.screen_position.astype(int), r)
 
     def update_info_text(self):
@@ -98,6 +98,7 @@ class Animation:
         elif event.type == pygame.MOUSEWHEEL:
             # Wheel up zooms in 5%
             if event.y > 0:
+                self.observer.position 
                 self.scale  *= 1.05**abs(event.y) 
             # Wheel down zooms out 5%
             elif event.y < 0:
@@ -118,7 +119,7 @@ class Animation:
                 dtheta = (mouse_x0 - self.mouse_x)/self.width
                 dphi = (mouse_y0 - self.mouse_y)/self.height
                 self.observer.theta += dtheta
-                self.observer.phi += dphi
+                self.observer.phi -= dphi
                 self.mouse_x = mouse_x0
                 self.mouse_y = mouse_y0
 
@@ -166,11 +167,15 @@ class Animation:
                 self.handle_user_input(event)
             # Update info text
             self.update_info_text()
+            # Flip display
             pygame.display.flip()
+            # Update clock
             self.clock.tick(self.fps)
-            if self.frame >= self.frames:
+            # Quit on final frame, else go to next frame
+            if self.frame > self.frames:
                 self.running = False
-            self.frame += 1
+            else:
+                self.frame += 1
         pygame.quit()
 
 

@@ -21,6 +21,12 @@ def normalize(v):
        return v
     return v / norm
 
+def cartesian_distance(p1, p2):
+    arg = 0
+    for i in range(len(p1)):
+        arg += (p1[i]-p2[i])**2
+    return math.sqrt(arg)
+
 def random_point_in_sphere(r=1, origin=[0.0,0.0,0.0]):
     u = random.random()
     x = np.random.normal()
