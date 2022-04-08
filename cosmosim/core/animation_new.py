@@ -72,17 +72,16 @@ class Animation:
     def get_screen_position(self, obj):
         p0 = obj.position
         p_obs = self.observer.position
-        p1 = p0 + p_obs
+        p1 = p0 - p_obs
         p2 = F.rotation_3d(p1, self.observer.theta, self.observer.phi)
-        p3 = p2*self.scale
-        p = p3[:2] + [self.width/2,self.height/2]
-        z = p3[2]
-        return p, z
+        q = (p2*self.scale)  + [self.width/2, self.height/2, 0]
+        return q
 
     def draw(self, obj):
-        d = F.cartesian_distance(obj.position, self.observer.position)
-        r = max(math.atan(obj.radius/d)*self.scale*obj.radius, 1.0)
-        pygame.draw.circle(self.canvas, obj.color, obj.screen_position.astype(int), r)
+        d = F.cartesian_distance(obj.screen_position, [self.width/2,self.height/2, 1.0])/self.scale
+        r = max(self.scale*math.atan(obj.radius/d)*obj.radius, 1.0)
+        #r = max(self.scale*obj.radius, 1)
+        pygame.draw.circle(self.canvas, obj.color, obj.screen_position[:2].astype(int), r)
 
     def update_info_text(self):
         # Update FPS
@@ -137,9 +136,9 @@ class Animation:
 
             }
             obj = Object(**properties)
-            q, z = self.get_screen_position(obj)
+            q = self.get_screen_position(obj)
             obj.screen_position = q
-            obj.z = z
+            obj.z = q[2]
             objects.append(obj)
         objects.sort(key=lambda x: x.z)
         return objects
@@ -159,6 +158,7 @@ class Animation:
             state = self.states[self.frame] 
             objects = self.get_objects(state)
             self.canvas.fill(BLACK)
+            #self.observer.position = [0.0, 0.0, 1/self.scale]
             for obj in objects:
                 self.draw(obj)
             self.screen.blit(self.canvas, [0.0,0.0])
@@ -172,8 +172,8 @@ class Animation:
             # Update clock
             self.clock.tick(self.fps)
             # Quit on final frame, else go to next frame
-            if self.frame > self.frames:
-                self.running = False
+            if self.frame == self.frames-1:
+                self.frame = 0
             else:
                 self.frame += 1
         pygame.quit()
