@@ -35,7 +35,8 @@ observer_params = {"position":observer_position, "theta":0.0, "phi":0.0}
 # test_sim.run(collisions=collisions, gpu=True)
 
 animation = Animation(path, scale=scale, observer_params=observer_params)
-cProfile.run("animation.play()", "restats_play")
+animation.play()
 
-p_gen = pstats.Stats('restats_play').strip_dirs()
-p_gen.sort_stats(SortKey.CUMULATIVE).print_stats(25)
+# cProfile.run("animation.play()", "restats_play")
+# p_gen = pstats.Stats('restats_play').strip_dirs()
+# p_gen.sort_stats(SortKey.CUMULATIVE).print_stats(25)

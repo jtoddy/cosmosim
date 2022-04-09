@@ -69,20 +69,19 @@ class Animation:
         q[:,2] = z
         return q
     
-    def onscreen(self, screen_coordinates):
+    def onscreen(self, screen_coordinates, r):
         x, y, z = screen_coordinates
-        onscreen = (x >= 0 and x <= self.width and y >= 0 and y <= self.height and z > 0)
+        onscreen = (x + r >= 0) and (x - r <= self.width) and (y + r >= 0) and (y - r <= self.height) and (z > 0)
         return onscreen
 
     def draw(self, i, state):
         q = state["screen_positions"][i]
-        if self.onscreen(q):
-            r0 = state["radii"][i]
-            color = state["colors"][i]
-            r = max(self.height*(r0/q[2]), 1.0)
+        r0 = state["radii"][i]
+        color = state["colors"][i]
+        r = max(self.height*(r0/q[2]), 1.0)
+        if self.onscreen(q, r):
             pygame.draw.circle(self.canvas, color, q[:2], r)
    
-
     def handle_user_input(self, event):
         if event.type == pygame.QUIT:
             print("Quitting...")
@@ -135,10 +134,27 @@ class Animation:
     
     def render_info_text(self):
         # Update FPS
-        effective_fps = self.clock.get_fps()
+        effective_fps = max(self.clock.get_fps(), 1)
         fps_text = "FPS: %.0f" % effective_fps
         fps_img = self.font.render(fps_text, True, WHITE)
         self.screen.blit(fps_img, (self.width*0.80, 20))
+        # Update frames
+        frame = self.frame
+        frames = self.frames
+        frames_text = f"Frames: {frame}/{frames} ({frame/frames:.0%})"
+        frames_img = self.font.render(frames_text, True, WHITE)
+        self.screen.blit(frames_img, (self.width*0.80, 40))
+        # Update elapsed time
+        elapsed_time = round(frame*self.current_state.get("dt",1)/effective_fps)
+        elapsed_time_formatted = str(datetime.timedelta(seconds=elapsed_time))
+        elapsed_time_text = f"Elapsed time: {elapsed_time_formatted}"
+        elapsed_time_img = self.font.render(elapsed_time_text, True, WHITE)
+        self.screen.blit(elapsed_time_img, (self.width*0.80, 60))
+        # Paused text
+        if self.paused:
+            paused_text = "PAUSED"
+            paused_img = self.font.render(paused_text, True, WHITE)
+            self.screen.blit(paused_img, (self.width*0.48, 20))
     
     def render_playback_controls(self):
         # Playback bar
@@ -162,6 +178,30 @@ class Animation:
         self.pauseplay_btn_rect = self.pauseplay_btn.get_rect()
         self.pauseplay_btn_rect = self.pauseplay_btn_rect.move(bar_end+15, bar_height-btn_size/2)
         self.screen.blit(self.pauseplay_btn, (bar_end+15, bar_height-btn_size/2))
+        # Runtime progress
+        effective_fps = max(self.clock.get_fps(), 1)
+        elapsed_time = round(self.frame/effective_fps)
+        total_time = round(self.frames/self.fps)
+        elapsed_time_formatted = str(datetime.timedelta(seconds=elapsed_time))
+        total_time_formatted = str(datetime.timedelta(seconds=total_time))
+        elapsed_time_text = f"{elapsed_time_formatted}/{total_time_formatted}"
+        elapsed_time_img = self.font.render(elapsed_time_text, True, WHITE)
+        self.screen.blit(elapsed_time_img, (20, bar_height-(elapsed_time_img.get_height()/3)))
+
+    def draw_objects(self):
+        state = self.current_state
+        state["screen_positions"] = self.get_screen_positions(state["positions"])
+        state["radii"] = [F.get_radius(m,d) for m, d in zip(state["masses"], state["densities"])]
+        plot_order = np.flip(state["screen_positions"][:,2].argsort())
+        for i in plot_order:
+            self.draw(i, state)
+        self.screen.blit(self.canvas, [0.0,0.0])
+
+    def draw_ui(self):
+        # Update info text
+        self.render_info_text()
+        # Render playback controls
+        self.render_playback_controls()
 
         
     def play(self, paused=False):
@@ -175,21 +215,17 @@ class Animation:
         self.running = True
         self.paused = paused
         self.frame = 0
+        self.current_state = None
         while self.running:
-            state = self.states[self.frame]
-            state["screen_positions"] = self.get_screen_positions(state["positions"])
-            state["radii"] = [F.get_radius(m,d) for m, d in zip(state["masses"], state["densities"])]
             self.canvas.fill(BLACK)
-            for i in range(state["n"]):
-                self.draw(i, state)
-            self.screen.blit(self.canvas, [0.0,0.0])
+            self.current_state = self.states[self.frame]
+            # Draw objects
+            self.draw_objects()
+            # Draw UI
+            self.draw_ui()
             # Handle user inputs
             for event in pygame.event.get():
                 self.handle_user_input(event)
-            # Update info text
-            self.render_info_text()
-            # Render playback controls
-            self.render_playback_controls()
             # Flip display
             pygame.display.flip()
             # Update clock
