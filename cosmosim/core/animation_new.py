@@ -145,7 +145,7 @@ class Animation:
         frames_img = self.font.render(frames_text, True, WHITE)
         self.screen.blit(frames_img, (self.width*0.80, 40))
         # Update elapsed time
-        elapsed_time = round(frame*self.current_state.get("dt",1)/effective_fps)
+        elapsed_time = round(frame*self.current_state.get("dt",1)/self.fps)
         elapsed_time_formatted = str(datetime.timedelta(seconds=elapsed_time))
         elapsed_time_text = f"Elapsed time: {elapsed_time_formatted}"
         elapsed_time_img = self.font.render(elapsed_time_text, True, WHITE)
@@ -179,8 +179,7 @@ class Animation:
         self.pauseplay_btn_rect = self.pauseplay_btn_rect.move(bar_end+15, bar_height-btn_size/2)
         self.screen.blit(self.pauseplay_btn, (bar_end+15, bar_height-btn_size/2))
         # Runtime progress
-        effective_fps = max(self.clock.get_fps(), 1)
-        elapsed_time = round(self.frame/effective_fps)
+        elapsed_time = round(self.frame/self.fps)
         total_time = round(self.frames/self.fps)
         elapsed_time_formatted = str(datetime.timedelta(seconds=elapsed_time))
         total_time_formatted = str(datetime.timedelta(seconds=total_time))
@@ -233,7 +232,7 @@ class Animation:
             # Quit on final frame, else go to next frame
             if self.paused:
                 pass
-            elif self.frame == self.frames-1:
+            elif self.frame >= self.frames-1:
                 self.frame = 0
             else:
                 self.frame += 1

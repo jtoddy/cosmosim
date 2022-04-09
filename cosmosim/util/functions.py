@@ -8,12 +8,9 @@ import math
 
 # Functions
 def pairwise_distances(positions):
-    n = len(positions)
-    distance = cp.empty((n,n))
-    for i in range(n):
-        distance[i,:] = cp.abs(cp.broadcast_to(positions[i,:], positions.shape) - positions).sum(axis=1)
-    return distance
-    
+    disps = positions.reshape((1, -1, 3)) - positions.reshape((-1, 1, 3))
+    dists = cp.linalg.norm(disps, axis=2)
+    return dists
         
 def normalize(v):
     norm = np.linalg.norm(v)

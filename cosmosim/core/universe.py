@@ -185,6 +185,7 @@ class State:
         masses = self.masses/ME #Scale down for float32
         nan_array = cp.array([cp.nan,cp.nan,cp.nan], dtype="float32")
         # Collision matrix
+        #d = F.pairwise_distances(self.positions)
         d = F.pairwise_distances(self.positions)
         collision_matrix = (d <= F.outer_sum(radii,radii))
         cp.fill_diagonal(collision_matrix, False)
