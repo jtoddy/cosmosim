@@ -227,11 +227,6 @@ class State:
         new_densities = F.outer_sum(densities_w, densities_w)/m_totals
         cp.putmask(new_densities, mask, cp.nan)
         new_densities = cp.nanmean(new_densities, axis=1)
-        # Should replace nan values with old values
-        if np.isnan(np.sum(new_positions[absorbing])):
-            print(masses[absorbing])
-            print(self.positions[absorbing])
-            print(new_positions[absorbing])
         # Update masses, densities, positions, and velocities
         self.masses = ME*(masses + (cp.sum(masses*absorbing_matrix, axis=1)))
         self.densities[absorbing] = new_densities[absorbing]

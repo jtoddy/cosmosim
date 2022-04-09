@@ -50,6 +50,31 @@ def to_cartesian_3d(r, theta, phi, origin=[0,0,0]):
     z = r*np.cos(phi) + origin[2]
     return [x,y,z]
 
+def Rx(theta):
+    Rx = np.array([
+        [1, 0, 0],
+        [0, np.cos(theta), np.sin(theta)],
+        [0, -np.sin(theta), np.cos(theta)]
+    ])
+    return Rx
+
+def Ry(theta):
+    Ry = np.array([
+        [np.cos(theta), 0, -np.sin(theta)],
+        [0, 1, 0],
+        [np.sin(theta), 0, np.cos(theta)]
+    ])
+    return Ry
+    
+def Rz(theta):
+    Rz = np.array([
+        [np.cos(theta), np.sin(theta), 0],
+        [-np.sin(theta), np.cos(theta), 0]
+        [0, 0, 1],
+        
+    ])
+    return Rz
+
 def rotation(v,theta):
     R = np.array([[np.cos(theta), -np.sin(theta)],
                   [np.sin(theta), np.cos(theta)]])

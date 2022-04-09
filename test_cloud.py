@@ -5,10 +5,13 @@ from cosmosim.util.constants import AU, ME, DE
 import cosmosim.util.functions as F
 import random
 import math
+import cProfile
+import pstats
+from pstats import SortKey
 
 
-NUM_OBJECTS = 500
-r = 0.01*AU
+NUM_OBJECTS = 3000
+r = 0.05*AU
 omega = 1e-6
 
 objects = []
@@ -25,8 +28,14 @@ iterations = 1000
 dt = 6
 collisions = True
 scale=1e-7
+observer_position = [0.0, 0.0, 0.15*AU]
+observer_params = {"position":observer_position, "theta":0.0, "phi":0.0}
 
 # test_sim = Universe(objects, iterations, dt=dt, outpath=path, filesize=3000)
-# test_sim.run(collisions=collisions, gpu=False)
-animation = Animation(path, scale=scale)
-animation.play()
+# test_sim.run(collisions=collisions, gpu=True)
+
+animation = Animation(path, scale=scale, observer_params=observer_params)
+cProfile.run("animation.play()", "restats_play")
+
+p_gen = pstats.Stats('restats_play').strip_dirs()
+p_gen.sort_stats(SortKey.CUMULATIVE).print_stats(25)
