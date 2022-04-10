@@ -90,7 +90,8 @@ class State:
     def get_acc_gpu(self, G):
         masses = self.masses/ME
         mass_matrix = masses.reshape((1, -1, 1))*masses.reshape((-1, 1, 1))
-        dists = F.pairwise_distances(self.positions)
+        disps = F.pairwise_displacements(self.positions)
+        dists = cp.linalg.norm(disps, axis=2)
         dists[dists == 0] = 1
         forces = (ME*G*disps*mass_matrix)/cp.expand_dims(dists, 2)**3
         a = (forces.sum(axis=1)/masses.reshape(-1, 1))

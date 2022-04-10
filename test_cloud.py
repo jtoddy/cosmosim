@@ -1,17 +1,13 @@
 from cosmosim.core.universe import Object, Universe
-#from cosmosim.core.animation import InteractiveAnimation
-from cosmosim.core.animation_new import Animation
+from cosmosim.core.animation import Animation
 from cosmosim.util.constants import AU, ME, DE
 import cosmosim.util.functions as F
 import random
 import math
-import cProfile
-import pstats
-from pstats import SortKey
 
 
-NUM_OBJECTS = 1000
-r = 0.02*AU
+NUM_OBJECTS = 5000
+r = 0.03*AU
 omega = 2e-6
 
 objects = []
@@ -23,7 +19,7 @@ for i in range(NUM_OBJECTS):
     obj = Object(m,d,p,velocity=v)
     objects.append(obj)
    
-path = "test_data/run1b/data/"
+path = "test_data/run2/data/"
 iterations = 3000
 dt = 60
 collisions = True
@@ -32,7 +28,7 @@ observer_position = [0.0, 0.0, 0.1*AU]
 observer_params = {"position":observer_position, "theta":0.0, "phi":0.0}
 
 # test_sim = Universe(objects, iterations, dt=dt, outpath=path, filesize=3000)
-# test_sim.run(collisions=collisions, gpu=False)
+# test_sim.run(collisions=collisions, gpu=True)
 
 animation = Animation(path, scale=scale, observer_params=observer_params)
 animation.play()

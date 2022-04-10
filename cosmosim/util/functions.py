@@ -7,8 +7,12 @@ except:
 import math
 
 # Functions
-def pairwise_distances(positions):
+def pairwise_displacements(positions):
     disps = positions.reshape((1, -1, 3)) - positions.reshape((-1, 1, 3))
+    return disps
+
+def pairwise_distances(positions):
+    disps = pairwise_displacements(positions)
     dists = cp.linalg.norm(disps, axis=2)
     return dists
         
