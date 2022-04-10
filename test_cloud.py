@@ -10,9 +10,9 @@ import pstats
 from pstats import SortKey
 
 
-NUM_OBJECTS = 3000
-r = 0.05*AU
-omega = 1e-6
+NUM_OBJECTS = 1000
+r = 0.02*AU
+omega = 2e-6
 
 objects = []
 for i in range(NUM_OBJECTS):
@@ -24,20 +24,15 @@ for i in range(NUM_OBJECTS):
     objects.append(obj)
    
 path = "test_data/run1b/data/"
-iterations = 10000
+iterations = 3000
 dt = 60
 collisions = True
 scale=1e-7
-observer_position = [0.0, 0.0, 0.15*AU]
+observer_position = [0.0, 0.0, 0.1*AU]
 observer_params = {"position":observer_position, "theta":0.0, "phi":0.0}
 
-test_sim = Universe(objects, iterations, dt=dt, outpath=path, filesize=3000)
-# test_sim.run(collisions=collisions, gpu=True)
-cProfile.run("test_sim.run(collisions=collisions, gpu=True)", "restats_gen2")
+# test_sim = Universe(objects, iterations, dt=dt, outpath=path, filesize=3000)
+# test_sim.run(collisions=collisions, gpu=False)
 
 animation = Animation(path, scale=scale, observer_params=observer_params)
 animation.play()
-
-
-p_gen = pstats.Stats('restats_gen2').strip_dirs()
-p_gen.sort_stats(SortKey.CUMULATIVE).print_stats(25)

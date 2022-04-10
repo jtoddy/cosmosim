@@ -12,7 +12,6 @@ from cosmosim.util.blas import acc_blas
 from cosmosim.util.constants import ME, G as _G, C
 from cosmosim.util.json_zip import json_zip
 import cosmosim.util.pronounceable.main as prnc
-from sklearn.metrics import pairwise_distances
 import json
 
 class Object:
@@ -91,8 +90,7 @@ class State:
     def get_acc_gpu(self, G):
         masses = self.masses/ME
         mass_matrix = masses.reshape((1, -1, 1))*masses.reshape((-1, 1, 1))
-        disps = self.positions.reshape((1, -1, 3)) - self.positions.reshape((-1, 1, 3))
-        dists = cp.linalg.norm(disps, axis=2)
+        dists = F.pairwise_distances(self.positions)
         dists[dists == 0] = 1
         forces = (ME*G*disps*mass_matrix)/cp.expand_dims(dists, 2)**3
         a = (forces.sum(axis=1)/masses.reshape(-1, 1))
@@ -127,65 +125,13 @@ class State:
             del self.names[i]
             del self.colors[i]
         self.n_objects = len(self.masses)
-    
-    def collide(self, i, j):
-        m_i = self.masses[i]/ME
-        m_j = self.masses[j]/ME
-        p_i = self.positions[i]
-        p_j = self.positions[j]
-        v_i = self.velocities[i]
-        v_j = self.velocities[j]
-        d_i = self.densities[i]
-        d_j = self.densities[j]
-        m_total = max(m_i+m_j, 1.0)
-        p = ((m_i*p_i)+(m_j*p_j))/m_total
-        v = ((m_i*v_i)+(m_j*v_j))/m_total
-        d = ((m_i*d_i)+(m_j*d_j))/m_total
-        self.masses[i] = m_total*ME
-        self.positions[i] = p
-        self.velocities[i] = v
-        self.densities[i] = d
-    
-    def resolve_collisions(self):
-        if self.gpu:
-            return self.resolve_collisions_gpu()
-        else:
-            n = self.n_objects
-            d = pairwise_distances(self.positions, n_jobs=-1, force_all_finite=True)
-            radii = self.get_radii()
-            collision_matrix = d <= np.add.outer(radii,radii)
-            np.fill_diagonal(collision_matrix,False)
-            # Return false if no collisions
-            if not np.max(collision_matrix):
-                return False
-            absorbed = []
-            for i in range(n):
-                if i not in absorbed:
-                    for j, c in enumerate(collision_matrix[i]):
-                            if c and j not in absorbed:
-                                if self.masses[i] >= self.masses[j]:
-                                    self.collide(i,j)
-                                    absorbed.append(j)
-                                else:
-                                    self.collide(j,i)
-                                    absorbed.append(i)
-            self.masses = np.delete(self.masses, absorbed)
-            self.positions = np.delete(self.positions, absorbed, axis=0)
-            self.velocities = np.delete(self.velocities, absorbed, axis=0)
-            self.densities = np.delete(self.densities, absorbed)
-            for i in sorted(absorbed, reverse=True):
-                del self.names[i]
-                del self.colors[i]
-            self.n_objects = len(self.masses)
-            return True
            
-    def resolve_collisions_gpu(self):
+    def resolve_collisions(self):
         # Initialize constants
         radii = self.get_radii()
         masses = self.masses/ME #Scale down for float32
         nan_array = cp.array([cp.nan,cp.nan,cp.nan], dtype="float32")
         # Collision matrix
-        #d = F.pairwise_distances(self.positions)
         d = F.pairwise_distances(self.positions)
         collision_matrix = (d <= F.outer_sum(radii,radii))
         cp.fill_diagonal(collision_matrix, False)
@@ -303,6 +249,7 @@ class Universe:
         if gpu:
             mempool = cp.get_default_memory_pool()
             mempool.free_all_blocks()
+        # Initialize state
         state = State(self.objects, dt=self.dt, gpu=gpu)
         nfiles = math.ceil(self.iterations/self.filesize) if self.filesize else 1
         elapsed = 0
@@ -337,7 +284,7 @@ class Universe:
         else:
             states = []
             for i in tqdm(range(self.iterations), desc="Running simulation"):
-                state.interact(collisions)
+                state.interact(collisions, G=self.G)
                 states.append(state.state_json())
             return states
             

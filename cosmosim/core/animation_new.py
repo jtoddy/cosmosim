@@ -54,6 +54,9 @@ class Animation:
         self.playback_tracker = None
         self.pauseplay_btn = None
         self.pauseplay_btn_rect = None
+        self.track_btn = None
+        self.lock_btn = None
+
         
     def get_screen_positions(self, positions):
         p = np.array(positions)
@@ -109,6 +112,12 @@ class Animation:
                 # Click on pause/play button
                 if self.pauseplay_btn_rect and self.pauseplay_btn_rect.collidepoint(event.pos):
                     self.paused = not self.paused
+                # Click on planet
+                else:
+                    selected_objs = [i for i, p in enumerate(self.current_state["screen_positions"]) if np.linalg.norm(p[:,[1,2]] - event.pos) <= max(self.height*(self.current_state["radii"][i]/self.current_state["screen_positions"][i][2]),10.0)]
+                    if len(selected_objs) > 0:
+                        self.selected_object = selected_objs[-1]
+                        self.selected_object_name = self.current_state["names"][self.selected_object]
         elif event.type == pygame.MOUSEMOTION:
             # Dragging mouse rotates the screen
             if self.dragging:
@@ -155,6 +164,78 @@ class Animation:
             paused_text = "PAUSED"
             paused_img = self.font.render(paused_text, True, WHITE)
             self.screen.blit(paused_img, (self.width*0.48, 20))
+
+    def render_selected_object_text(self):
+        obj = self.selected_object
+        state = self.current_state
+        if obj != None:
+            if state["names"][obj]:
+                name = state["names"][obj]
+                # Info box dimensions
+                INFO_X = 10
+                INFO_Y = 10
+                INFO_WIDTH = 420
+                INFO_HEIGHT = 150
+                BTN_SIZE = 30
+                TXT_PAD = 10
+                INFO_X2 = INFO_X + INFO_WIDTH
+                INFO_Y2 = INFO_Y + INFO_HEIGHT
+                
+                # Box Outline
+                pygame.draw.rect(self.screen, WHITE, ((INFO_X, INFO_Y), (INFO_WIDTH, INFO_HEIGHT)), 2)
+                
+                # Header bar
+                pygame.draw.line(self.screen, WHITE, (INFO_X,INFO_Y+BTN_SIZE), (INFO_X2,INFO_Y+BTN_SIZE), 1)
+                
+                # Close button
+                self.close_btn = pygame.draw.rect(self.screen, WHITE, ((INFO_X2-BTN_SIZE,INFO_Y),(BTN_SIZE,BTN_SIZE)), 2)
+                close_img = self.font.render("X", True, WHITE)
+                self.screen.blit(close_img, (INFO_X2-BTN_SIZE+TXT_PAD,INFO_Y+TXT_PAD))
+                
+                # Track button
+                if self.selected_object_name in self.tracked_objects.keys():                  
+                    self.track_btn = pygame.draw.rect(self.screen, WHITE, ((INFO_X,INFO_Y2),(INFO_WIDTH/4,BTN_SIZE)), 0)
+                    track_img = self.font.render("TRACK", True, BLACK)
+                else:
+                    self.track_btn = pygame.draw.rect(self.screen, WHITE, ((INFO_X,INFO_Y2),(INFO_WIDTH/4,BTN_SIZE)), 2)
+                    track_img = self.font.render("TRACK", True, WHITE)
+                self.screen.blit(track_img, (INFO_X+TXT_PAD, INFO_Y2+TXT_PAD-1))
+                
+                # Lock button
+                if self.selected_object_name == self.locked_object:                  
+                    self.lock_btn = pygame.draw.rect(self.screen, WHITE, ((INFO_X+(INFO_WIDTH/4),INFO_Y2),(INFO_WIDTH/4,BTN_SIZE)), 0)
+                    lock_img = self.font.render("LOCK", True, BLACK)
+                else:
+                    self.lock_btn = pygame.draw.rect(self.screen, WHITE, ((INFO_X+(INFO_WIDTH/4),INFO_Y2),(INFO_WIDTH/4,BTN_SIZE)), 2)
+                    lock_img = self.font.render("LOCK", True, WHITE)
+                self.screen.blit(lock_img, (INFO_X+TXT_PAD+(INFO_WIDTH/4), INFO_Y2+TXT_PAD-1))
+                
+                # Planet info text
+                p = state["positions"][obj]
+                v = state["velocities"][obj]
+                q = self.screen_positions[obj]
+                z = self.Z[obj]
+                vmag = np.linalg.norm(np.array(v))
+                ptext1 = name.upper()
+                ptext2 = "Mass: {:.2e} Earth masses".format(state["masses"][obj]/ME)
+                ptext3 = "Radius: {:.2e} km".format(self.radii[obj]/1000)
+                ptext4 = "Position: [{:.1e}, {:.1e}, {:.1e}] m".format(*p)
+                ptext5 = "Velocity: [{:.1e}, {:.1e}, {:.1e}] {:.1e} m/s".format(*v, vmag)
+                ptext6 = "Screen coordinates: [{:.0f}, {:.0f}] z={:.1e}".format(*q, z)
+                pimg1 = self.font.render(ptext1, True, WHITE)
+                pimg2 = self.font.render(ptext2, True, WHITE)
+                pimg3 = self.font.render(ptext3, True, WHITE) 
+                pimg4 = self.font.render(ptext4, True, WHITE)
+                pimg5 = self.font.render(ptext5, True, WHITE)
+                pimg6 = self.font.render(ptext6, True, WHITE)
+                self.screen.blit(pimg1, (20, INFO_Y + TXT_PAD))
+                self.screen.blit(pimg2, (20, INFO_Y + 2*TXT_PAD + 20))
+                self.screen.blit(pimg3, (20, INFO_Y + 2*TXT_PAD + 40))
+                self.screen.blit(pimg4, (20, INFO_Y + 2*TXT_PAD + 60))
+                self.screen.blit(pimg5, (20, INFO_Y + 2*TXT_PAD + 80))
+                self.screen.blit(pimg6, (20, INFO_Y + 2*TXT_PAD + 100))
+            else:
+                self.selected_object = None
     
     def render_playback_controls(self):
         # Playback bar
@@ -215,6 +296,8 @@ class Animation:
         self.paused = paused
         self.frame = 0
         self.current_state = None
+        self.selected_object = None
+        self.selected_object_name = None
         while self.running:
             self.canvas.fill(BLACK)
             self.current_state = self.states[self.frame]
