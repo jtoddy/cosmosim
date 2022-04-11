@@ -10,5 +10,5 @@ MS = 1.989e30       # Mass of the sun
 RS = 6.9634e8       # Radius of the sun
 DS = 1408           # Density of the sun
 DAYTIME = 86400     # Seconds in a day
-G = 6.674e-11      # Gravitational constant
+G = 6.674e-11       # Gravitational constant
 C = 3e8             # Speed of light

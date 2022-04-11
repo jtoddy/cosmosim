@@ -12,18 +12,17 @@ from tqdm import tqdm
 class Observer:
     
     def __init__(self, position, theta=0.0, phi=0.0):
-        self.position = position
+        self.position = np.array(position)
         self.theta = theta
         self.phi = phi
 
 
 class Animation:
     
-    def __init__(self, data, width=1600, height=1000, fps=60, scale=1.3e-6, observer_params=None):
+    def __init__(self, data, width=1600, height=1000, fps=60, observer_params=None):
         self.width = width
         self.height = height
         self.fps = fps
-        self.scale = scale
         observer_params = observer_params or {"position":[0.0, 0.0, 0.0], "theta":0.0, "phi":0.0}
         self.observer = Observer(**observer_params)
         self.states = self.load_data(data)
@@ -236,7 +235,7 @@ class Animation:
         frames_img = self.font.render(frames_text, True, WHITE)
         self.screen.blit(frames_img, (self.width*0.80, 40))
         # Update elapsed time
-        elapsed_time = round(frame*self.current_state.get("dt",1)/self.fps)
+        elapsed_time = round(frame*self.current_state.get("dt",1))
         elapsed_time_formatted = str(datetime.timedelta(seconds=elapsed_time))
         elapsed_time_text = f"Elapsed time: {elapsed_time_formatted}"
         elapsed_time_img = self.font.render(elapsed_time_text, True, WHITE)
@@ -301,7 +300,7 @@ class Animation:
             ptext3 = "Radius: {:.2e} km".format(state["radii"][obj]/1000)
             ptext4 = "Position: [{:.1e}, {:.1e}, {:.1e}] m".format(*p)
             ptext5 = "Velocity: [{:.1e}, {:.1e}, {:.1e}] {:.1e} m/s".format(*v, vmag)
-            ptext6 = "Screen coordinates: [{:.0f}, {:.0f}] z={:.1e}".format(*q)
+            ptext6 = "Screen coordinates: [{:.0f}, {:.0f}] z = {:.1e} m".format(*q)
             pimg1 = self.font.render(ptext1, True, WHITE)
             pimg2 = self.font.render(ptext2, True, WHITE)
             pimg3 = self.font.render(ptext3, True, WHITE) 

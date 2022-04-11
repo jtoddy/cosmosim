@@ -6,29 +6,29 @@ import random
 import math
 
 
-NUM_OBJECTS = 5000
-r = 0.03*AU
-omega = 2e-6
+NUM_OBJECTS = 1000
+r = 0.02*AU
+omega = 5e-6
 
 objects = []
 for i in range(NUM_OBJECTS):
     m = 10*ME*random.random()
     d = DE
     p = F.random_point_in_sphere(r=r)
-    v = F.rotation_3d(p*omega, math.pi/2, 0)
+    phi = abs(math.atan(p[1]/p[0]))
+    v = F.rotation_3d(p*omega, math.pi/2, 0)*math.cos(phi)
     obj = Object(m,d,p,velocity=v)
     objects.append(obj)
    
-path = "test_data/run2/data/"
-iterations = 3000
+path = "test_data/run1/data/"
+iterations = 6000
 dt = 60
 collisions = True
-scale=1e-7
 observer_position = [0.0, 0.0, 0.1*AU]
 observer_params = {"position":observer_position, "theta":0.0, "phi":0.0}
 
-# test_sim = Universe(objects, iterations, dt=dt, outpath=path, filesize=3000)
-# test_sim.run(collisions=collisions, gpu=True)
+test_sim = Universe(objects, iterations, dt=dt, outpath=path, filesize=3000)
+test_sim.run(collisions=collisions, gpu=False)
 
-animation = Animation(path, scale=scale, observer_params=observer_params)
+animation = Animation(path, observer_params=observer_params)
 animation.play()

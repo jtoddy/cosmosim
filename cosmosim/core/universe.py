@@ -30,21 +30,45 @@ class Object:
     
     def get_radius(self):
         return ((3*self.get_volume())/(4*math.pi))**(1/3)
-        
-    def create_satellite(self, distance=None, mass=None, density=None, 
-                         theta=None, name=None, color=None, G=_G):
-        distance = distance or random.randint(int(self.get_radius()*5), int(self.get_radius()*100))
+
+    def kep_2_cart(self,a,e,i,omega_AP,omega_LAN,T, EA):
+        t=0
+        mu = self.mass * _G
+        n = np.sqrt(mu/(a**3))
+        M = n*(t - T)
+        MA = EA - e*np.sin(EA)
+        nu = 2*np.arctan(np.sqrt((1+e)/(1-e)) * np.tan(EA/2))
+        r = a*(1 - e*np.cos(EA))
+        h = np.sqrt(mu*a * (1 - e**2))
+        Om = omega_LAN
+        w =  omega_AP
+        X = r*(np.cos(Om)*np.cos(w+nu) - np.sin(Om)*np.sin(w+nu)*np.cos(i))
+        Y = r*(np.sin(Om)*np.cos(w+nu) + np.cos(Om)*np.sin(w+nu)*np.cos(i))
+        Z = r*(np.sin(i)*np.sin(w+nu))
+        p = a*(1-e**2)
+        V_X = (X*h*e/(r*p))*np.sin(nu) - (h/r)*(np.cos(Om)*np.sin(w+nu) + \
+        np.sin(Om)*np.cos(w+nu)*np.cos(i))
+        V_Y = (Y*h*e/(r*p))*np.sin(nu) - (h/r)*(np.sin(Om)*np.sin(w+nu) - \
+        np.cos(Om)*np.cos(w+nu)*np.cos(i))
+        V_Z = (Z*h*e/(r*p))*np.sin(nu) + (h/r)*(np.cos(w+nu)*np.sin(i))
+        return [X,Y,Z],[V_X,V_Y,V_Z]
+
+    def create_satellite(self, name=None, mass=None, color=None, density=None, keplerian_elements={}):
         mass = mass or random.random()*self.mass
         density = density or self.density
-        theta = theta or 2*math.pi*random.random()
-        v_mag = math.sqrt((self.mass*G)/distance) # Circular orbit
-        pos = F.to_cartesian(distance, theta)
-        pos_norm = pos/np.linalg.norm(pos)
-        v = np.append(F.rotation(v_mag*pos_norm,math.pi/2), [0])
-        pos = np.append(pos, [0])
-        obj = Object(mass, density, pos, v, name, color)
+        keplerian_elements = {
+            "a":random.randint(int(self.get_radius()*5), int(self.get_radius()*100)),
+            "e":0,
+            "i":0,
+            "omega_AP":0,
+            "omega_LAN":0,
+            "T":0,
+            "EA":0,
+            **keplerian_elements
+        }
+        pos, v = self.kep_2_cart(**keplerian_elements)
+        obj = Object(mass, density, pos+self.position, v, name, color)
         return obj
-
 
 class State:
     def __init__(self, objects, dt=1, gpu=False):
@@ -88,12 +112,12 @@ class State:
             return acc_blas(self.positions, self.masses, G)  # Magic!!!
     
     def get_acc_gpu(self, G):
-        masses = self.masses/ME
+        masses = self.masses
         mass_matrix = masses.reshape((1, -1, 1))*masses.reshape((-1, 1, 1))
         disps = F.pairwise_displacements(self.positions)
         dists = cp.linalg.norm(disps, axis=2)
         dists[dists == 0] = 1
-        forces = (ME*G*disps*mass_matrix)/cp.expand_dims(dists, 2)**3
+        forces = (G*disps*mass_matrix)/cp.expand_dims(dists, 2)**3
         a = (forces.sum(axis=1)/masses.reshape(-1, 1))
         return a
 
