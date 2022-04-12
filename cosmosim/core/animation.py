@@ -77,22 +77,31 @@ class Animation:
         p0 = R.dot(p.T).T
         if self.locked_object:
             i = self.current_state["names"].index(self.locked_object)
-            locked_offset = p0[i]
+            try:
+                locked_offset = p0[i]
+            except:
+                locked_offset = self.current_state["screen_positions"][i] + self.observer.position
             self.observer.position[[0,1]] = locked_offset[[0,1]]
         p0 -= self.observer.position
         # Normalize
         z = (-p0[:,2]).copy()
-        p1 = (p0/z[None,:].T)#[:,[0,1]]
+        p1 = (p0/z[None,:].T)
         p2 = (p1*2 + disp_scale)/(2*disp_scale)
         # Convert to screen coordinates
         q = p2*disp_pixels*np.array([1, -1, 1]) + np.array([0, self.height, 0])
         q[:,2] = z
         return q
-    
-    def onscreen(self, screen_coordinates, r):
-        x, y, z = screen_coordinates
-        onscreen = (x + r >= 0) and (x - r <= self.width) and (y + r >= 0) and (y - r <= self.height) and (z > 0)
-        return onscreen
+
+    def onscreen(self, screen_positions, r):
+        p  = screen_positions
+        p_onscreen = (
+            (p[:,2]>=0)
+            & (p[:,0] + r >= 0)
+            & (p[:,0] - r <= self.width)
+            & (p[:,1] + r >= 0)
+            & (p[:,1] - r <= self.height)
+        )
+        return p_onscreen
 
     def draw_object(self, i):
         state = self.current_state
@@ -101,10 +110,10 @@ class Animation:
         color = state["colors"][i]
         name = state["names"][i]
         r = max(self.height*(r0/q[2]), 1.0)
-        if self.onscreen(q, r):
-            if self.selected_object_name == name:
-                pygame.draw.circle(self.canvas, WHITE, q[:2], max(int(r*2), 4), width=2)
-            pygame.draw.circle(self.canvas, color, q[:2], r)
+        #if self.onscreen(q, r):
+        if self.selected_object_name == name:
+            pygame.draw.circle(self.canvas, WHITE, q[:2], max(int(r*2), 4), width=2)
+        pygame.draw.circle(self.canvas, color, q[:2], r)
             
     def is_clicked(self, i, pos):
         p = self.current_state["screen_positions"][i]
@@ -197,7 +206,7 @@ class Animation:
                 else:
                     selected_objs = [i for i in range(self.current_state["n"]) if self.is_clicked(i, event.pos)]
                     if len(selected_objs) > 0:
-                        self.selected_object = selected_objs[-1]
+                        self.selected_object = selected_objs[0]
                         self.selected_object_name = self.current_state["names"][self.selected_object]
         elif event.type == pygame.MOUSEMOTION:
             # Dragging mouse rotates the screen
@@ -240,6 +249,10 @@ class Animation:
         elapsed_time_text = f"Elapsed time: {elapsed_time_formatted}"
         elapsed_time_img = self.font.render(elapsed_time_text, True, WHITE)
         self.screen.blit(elapsed_time_img, (self.width*0.80, 60))
+        # Observer position
+        observer_position_text = "Zoom: {:.1e} m".format(self.observer.position[2])
+        observer_position_img = self.font.render(observer_position_text, True, WHITE)
+        self.screen.blit(observer_position_img, (self.width*0.80, 80))
         # Paused text
         if self.paused:
             paused_text = "PAUSED"
@@ -348,12 +361,14 @@ class Animation:
 
     def draw_objects(self):
         state = self.current_state
+        onscreen_objects = self.onscreen(state["screen_positions"], state["radii"])
         plot_order = np.flip(state["screen_positions"][:,2].argsort())
         for i in plot_order:
             name = state["names"][i]
             if name in self.tracked_objects.keys():
                 self.draw_history(name)
-            self.draw_object(i)
+            if onscreen_objects[i]:
+                self.draw_object(i)
         self.screen.blit(self.canvas, [0.0,0.0])
         
     def draw_history(self, name):

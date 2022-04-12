@@ -45,7 +45,7 @@ for planet_name in planet_stats:
 
 path = "test_data/run_ssystem/data/"
 iterations = 6000
-dt = 600
+dt = 60
 collisions = True
 observer_position = [0.0, 0.0, 5*AU]
 observer_params = {"position":observer_position, "theta":0.0, "phi":0.0}
