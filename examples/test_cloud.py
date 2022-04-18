@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.getcwd())
+
 from cosmosim.core.universe import Object, Universe
 from cosmosim.core.animation import Animation
 from cosmosim.util.constants import AU, ME, DE
@@ -8,7 +12,7 @@ import math
 
 NUM_OBJECTS = 1000
 r = 0.02*AU
-omega = 5e-6
+omega = 8e-6
 
 objects = []
 for i in range(NUM_OBJECTS):
@@ -21,14 +25,14 @@ for i in range(NUM_OBJECTS):
     objects.append(obj)
    
 path = "test_data/run1/data/"
-iterations = 6000
+iterations = 60000
 dt = 60
 collisions = True
 observer_position = [0.0, 0.0, 0.1*AU]
 observer_params = {"position":observer_position, "theta":0.0, "phi":0.0}
 
-test_sim = Universe(objects, iterations, dt=dt, outpath=path, filesize=3000)
-test_sim.run(collisions=collisions, gpu=False)
+# test_sim = Universe(objects, iterations, dt=dt, outpath=path, filesize=10000)
+# test_sim.run(collisions=collisions, gpu=False)
 
 animation = Animation(path, observer_params=observer_params)
 animation.play()

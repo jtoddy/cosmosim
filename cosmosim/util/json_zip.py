@@ -1,11 +1,9 @@
 # RA, 2019-01-22
 # Compress and decompress a JSON object
-
 # License: CC0 -- "No rights reserved"
-
 # For zlib license, see https://docs.python.org/3/license.html
-import zlib
 
+import zlib
 import json, base64
 
 ZIPJSON_KEY = 'base64(zip(o))'

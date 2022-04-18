@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.getcwd())
+
 from cosmosim.core.universe import Object, Universe
 from cosmosim.core.animation import Animation
 from cosmosim.util.constants import AU, ME, DE, MS, DS

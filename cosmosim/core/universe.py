@@ -257,9 +257,9 @@ class Universe:
             if np.isnan(np.sum(m)):
                 m_valid = False
                 problems.append("NaN values detected")
-            if np.sum(m) == 0:
-                m_valid = False
-                problems.append("All entries are 0")
+            # if np.sum(m) == 0:
+            #     m_valid = False
+            #     problems.append("All entries are 0")
             if len(m) != n:
                 m_valid = False
                 p = "too big" if len(m) > n else "too small"
@@ -302,7 +302,6 @@ class Universe:
                         break                    
                 print(f"Writing file {n+1}/{nfiles}...")
                 with open(path, "w") as f:
-                    #json.dump(states,f)
                     states_compressed = json_zip(states)
                     json.dump(states_compressed, f)
                 print("Done!")

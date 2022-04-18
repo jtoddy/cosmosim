@@ -1,4 +1,34 @@
-{
+import sys
+import os
+sys.path.insert(0, os.getcwd())
+
+from cosmosim.core.universe import Object, Universe
+from cosmosim.core.animation import Animation
+from cosmosim.util.constants import AU, ME, DE, MS, DS
+import cosmosim.util.functions as F
+import random
+import math
+import numpy as np
+import json
+
+# Create a star
+STAR_MASS = MS
+STAR_DENSITY = DS
+STAR_POSITION = [0,0,0]
+STAR_NAME = "Sol"
+STAR_COLOR = (255,255,0) # yellow
+
+sun = Object(
+	mass=STAR_MASS, 
+    density=STAR_DENSITY, 
+    position=STAR_POSITION,
+    name=STAR_NAME, 
+    color=STAR_COLOR
+)
+
+# Solar system state vectors on 2021-01-01 00:00:00
+planet_stats = {
+	#Planets
 	"mercury":{
 		"mass":0.33e24,
 		"density":5429,
@@ -55,7 +85,7 @@
 		"position":[4.406236886270197e09, -7.817713304515282e08, -8.544717467575288e07],
 		"velocity":[9.128317569628802e-01,  5.384083139759752e00, -1.312921917550081e-01]
 	},
-
+	# Moons
 	"luna":{
 		"mass":0.073e24,
 		"density":3340,
@@ -98,5 +128,35 @@
 		"position":[8.192118450254436E+08, -1.246557931437262E+09, -1.112429427030587E+07],
 		"velocity":[5.278239460935746E+00,  1.002170842064872E+00,  2.040371389848600E+00]
 	}
-
 }
+
+planets = []
+for planet_name in planet_stats:
+	stats = planet_stats[planet_name]
+	mass = stats["mass"]
+	density = stats["density"]
+	color = stats["color"]
+	position = np.array(stats["position"])*1000
+	velocity = np.array(stats["velocity"])*1000
+	obj = Object(
+		name=planet_name,
+		mass=mass,
+		density=density,
+		color=color,
+		position=position,
+		velocity=velocity
+	)
+	planets.append(obj)
+
+path = "test_data/run_ssystem/data/"
+iterations = 6000
+dt = 60
+collisions = True
+observer_position = [0.0, 0.0, 5*AU]
+observer_params = {"position":observer_position, "theta":0.0, "phi":0.0}
+
+# test_sim = Universe([sun]+planets, iterations, dt=dt, outpath=path)
+# test_sim.run(collisions=collisions, gpu=False)
+
+animation = Animation(path, observer_params=observer_params)
+animation.play()

@@ -1,10 +1,10 @@
-import cosmosim.util.functions as F
 import os
 import pygame
 import numpy as np
 import datetime
 import json
 import math
+import cosmosim.util.functions as F
 from cosmosim.util.constants import WHITE, BLACK, ME
 from cosmosim.util.json_zip import json_unzip
 from tqdm import tqdm
@@ -51,17 +51,22 @@ class Animation:
         self.canvas = pygame.Surface((self.width, self.height))
         self.font = pygame.font.SysFont(None, 24)
         self.frame = 0
-        self.current_state = None
+        self.speed = 1.0
+        self.current_state = self.states[0]
         self.selected_object = None
         self.selected_object_name = None
         self.tracked_objects = {}
         self.locked_object = None
+        self.locked_offset = None
+        self.locked_index = None
         self.paused = False
         self.dragging = False
         self.playback_tracking = False
         self.playback_tracker = None
         self.pauseplay_btn = None
         self.pauseplay_btn_rect = None
+        self.restart_btn = None
+        self.restart_btn_rect = None
         self.close_btn = None
         self.track_btn = None
         self.lock_btn = None
@@ -74,14 +79,9 @@ class Animation:
         disp_pixels = np.array([self.width, self.height, 0])
         # Convert to observer coordinates
         R = np.matmul(F.Ry(self.observer.theta), F.Rx(self.observer.phi))
-        p0 = R.dot(p.T).T
         if self.locked_object:
-            i = self.current_state["names"].index(self.locked_object)
-            try:
-                locked_offset = p0[i]
-            except:
-                locked_offset = self.current_state["screen_positions"][i] + self.observer.position
-            self.observer.position[[0,1]] = locked_offset[[0,1]]
+            p = p - self.locked_offset
+        p0 = R.dot(p.T).T
         p0 -= self.observer.position
         # Normalize
         z = (-p0[:,2]).copy()
@@ -124,8 +124,12 @@ class Animation:
     def toggle_locking(self, obj):
         if self.locked_object == obj:
             self.locked_object = None
+            self.locked_offset = None
+            self.locked_index = None
         else:
             self.locked_object = obj
+            self.locked_index = self.current_state["names"].index(obj)
+            self.locked_offset = np.array(self.current_state["positions"][self.locked_index])
     
     def toggle_tracking(self, obj_name):
         if obj_name in self.tracked_objects.keys():
@@ -145,6 +149,11 @@ class Animation:
         if self.locked_object:
             if not self.locked_object in names:
                 self.locked_object = None
+                self.locked_index = None
+                self.locked_offset = None
+            else:
+                self.locked_index = self.current_state["names"].index(self.locked_object)
+                self.locked_offset = np.array(self.current_state["positions"][self.locked_index])
             
     def clear_tracking_histories(self):
         for obj in self.tracked_objects:
@@ -159,7 +168,7 @@ class Animation:
                 i = state["names"].index(obj)
                 p = state["positions"][i]
                 self.tracked_objects[obj].append(p)
-                self.tracked_objects[obj] = self.tracked_objects[obj][-1000:]
+                self.tracked_objects[obj] = self.tracked_objects[obj][-self.obj_history_length:]
             else:
                 abs_obj.append(obj)
         for obj in abs_obj:
@@ -170,12 +179,13 @@ class Animation:
             print("Quitting...")
             self.running = False
         elif event.type == pygame.MOUSEWHEEL:
+            dy = max(abs(self.observer.position[2]*(0.05*abs(event.y))), 1)
             # Wheel up zooms in 5%
             if event.y > 0:
-                self.observer.position = np.array(self.observer.position) - np.array([0.0, 0.0, self.observer.position[2]*(0.05*abs(event.y))])
+                self.observer.position = np.array(self.observer.position) - np.array([0.0, 0.0, dy])
             # Wheel down zooms out 5%
             elif event.y < 0:
-                self.observer.position = np.array(self.observer.position) + np.array([0.0, 0.0, self.observer.position[2]*(0.05*abs(event.y))])
+                self.observer.position = np.array(self.observer.position) + np.array([0.0, 0.0, dy])
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if self.playback_tracker and self.playback_tracker.collidepoint(event.pos):
                 self.playback_tracking = True
@@ -192,6 +202,9 @@ class Animation:
                 # Click on pause/play button
                 if self.pauseplay_btn_rect and self.pauseplay_btn_rect.collidepoint(event.pos):
                     self.paused = not self.paused
+                # Click on restart button
+                if self.restart_btn and self.restart_btn_rect.collidepoint(event.pos):
+                    self.restart()
                 # Click on object tracking button
                 elif self.track_btn and self.track_btn.collidepoint(event.pos) and self.selected_object != None:
                     self.toggle_tracking(self.selected_object_name)
@@ -238,7 +251,7 @@ class Animation:
         fps_img = self.font.render(fps_text, True, WHITE)
         self.screen.blit(fps_img, (self.width*0.80, 20))
         # Update frames
-        frame = self.frame
+        frame = round(self.frame)
         frames = self.frames
         frames_text = f"Frames: {frame}/{frames} ({frame/frames:.0%})"
         frames_img = self.font.render(frames_text, True, WHITE)
@@ -253,6 +266,10 @@ class Animation:
         observer_position_text = "Zoom: {:.1e} m".format(self.observer.position[2])
         observer_position_img = self.font.render(observer_position_text, True, WHITE)
         self.screen.blit(observer_position_img, (self.width*0.80, 80))
+        # Simulation speed
+        speed_text = f"Speed: {self.speed:.2f}x"
+        speed_img = self.font.render(speed_text, True, WHITE)
+        self.screen.blit(speed_img, (self.width*0.80, 100))
         # Paused text
         if self.paused:
             paused_text = "PAUSED"
@@ -349,6 +366,12 @@ class Animation:
         self.pauseplay_btn_rect = self.pauseplay_btn.get_rect()
         self.pauseplay_btn_rect = self.pauseplay_btn_rect.move(bar_end+15, bar_height-btn_size/2)
         self.screen.blit(self.pauseplay_btn, (bar_end+15, bar_height-btn_size/2))
+        # Restart button
+        self.restart_btn = pygame.image.load("cosmosim/resources/restart_icon.png")
+        self.restart_btn = pygame.transform.scale(self.restart_btn, (btn_size+5, btn_size+5))
+        self.restart_btn_rect = self.restart_btn.get_rect()
+        self.restart_btn_rect = self.restart_btn_rect.move(bar_end+50, bar_height-btn_size/2)
+        self.screen.blit(self.restart_btn, (bar_end+50, bar_height-btn_size/2))
         # Runtime progress
         elapsed_time = round(self.frame/self.fps)
         total_time = round(self.frames/self.fps)
@@ -365,10 +388,10 @@ class Animation:
         plot_order = np.flip(state["screen_positions"][:,2].argsort())
         for i in plot_order:
             name = state["names"][i]
-            if name in self.tracked_objects.keys():
-                self.draw_history(name)
             if onscreen_objects[i]:
                 self.draw_object(i)
+            if name in self.tracked_objects.keys():
+                self.draw_history(name)
         self.screen.blit(self.canvas, [0.0,0.0])
         
     def draw_history(self, name):
@@ -398,19 +421,28 @@ class Animation:
         # Render selected object text
         self.render_selected_object_text()
 
+    def restart(self):
+        self.clear_tracking_histories()
+        self.frame = 0
         
-    def play(self, paused=False):
+    def play(self, speed=1.0, paused=False, track_all=False, obj_history_length=1000):
         self.initialize_ui()
         self.running = True
         self.paused = paused
+        self.speed = speed
+        self.obj_history_length = obj_history_length
+        if track_all:
+            for obj in self.current_state["names"]:
+                self.toggle_tracking(obj)
         while self.running:
             # Refresh canvas and state
             self.canvas.fill(BLACK)
-            self.current_state = self.states[self.frame]
+            self.current_state = self.states[round(self.frame)]
             self.update_object_statuses()
             self.project_current_state_to_screen()
             # Update tracked object histories
-            self.update_tracked_object_histories()
+            if not self.paused:
+                self.update_tracked_object_histories()
             # Draw objects
             self.draw_objects()
             # Draw UI
@@ -426,8 +458,7 @@ class Animation:
             if self.paused:
                 pass
             elif self.frame >= self.frames-1:
-                self.frame = 0
-                self.clear_tracking_histories()
+                self.restart()
             else:
-                self.frame += 1
+                self.frame += self.speed
         pygame.quit()

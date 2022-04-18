@@ -82,9 +82,12 @@ def rotation(v,theta):
     return np.matmul(R,v)
 
 def rotation_3d(v, theta, phi):
-    Rtheta = np.array([[np.cos(theta), 0, np.sin(theta)],
-                      [0,1,0],
-                      [-np.sin(theta), 0, np.cos(theta)]])
+    Rtheta = np.array([
+        [np.cos(theta), np.sin(theta), 0],
+        [-np.sin(theta), np.cos(theta), 0],
+        [0, 0, 1],
+        
+    ])
     Rphi = np.array([[1, 0, 0],
                      [0, np.cos(phi), -np.sin(phi)],
                      [0, np.sin(phi), np.cos(phi)]])
@@ -124,23 +127,3 @@ def less(a, b):
 
 def equal(a, b):
     return (a[:, None] == b[None, :])
-
-def screen_coordinates(p, scale, offset, origin):
-    return origin + (np.multiply(p,np.array([1,-1]))*scale)+(offset*scale)
-
-def screen_coordinates_3d(p, scale, offset, rotation, origin):
-    theta, phi = rotation
-    v0 = rotation_3d(p, theta, phi)
-    z = v0[2]
-    v1 = np.delete(v0, 2, 0)
-    v = origin + (np.multiply(v1,np.array([1,-1]))*scale)+(offset*scale)
-    return v, z
-
-def screen_coordinates_3d_multi(P, scale, offset, rotation, origin):
-    theta, phi = rotation
-    S0 = rotation_3d_multi(P, theta, phi)
-    Z = S0[:,2]
-    S1 = S0[:,[0,1]]
-    S2 = np.multiply(S1,np.array([1,-1]))*scale
-    S = S2+np.array(origin+(offset*scale))
-    return S, Z
